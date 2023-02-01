@@ -1,0 +1,5 @@
+rest_list:  "8001"
+node_port: "3001"
+log_level : "INFO"
+log_output: "./out.log"
+peers_list: "./node.txt"
