@@ -12,10 +12,12 @@ import (
 func Start(cfg *config.Config) error {
 
 	log.Info("BU Chain Server Starting")
+	//PipeSet contain a set of pub/sub pipe for internal go routine communication
 	pipeSet := blockchain.NewPipeSet()
-	_ = blockchain.NewCacheSet()
+	//CacheSet contain a set of global routine safe cache for context
+	cacheSet := blockchain.NewCacheSet()
 
-	blockServer := blockchain.NewBlockServer(cfg, pipeSet)
+	blockServer := blockchain.NewBlockServer(cfg, pipeSet, cacheSet)
 
 	blockServer.Start() //non block start up
 
