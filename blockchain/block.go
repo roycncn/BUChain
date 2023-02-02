@@ -16,7 +16,7 @@ type Block struct {
 	data      string
 }
 
-func NewBlock(data string, prevBlock Block) *Block {
+func NewBlock(data string, prevBlock *Block) *Block {
 	block := &Block{}
 	block.index = prevBlock.index + 1
 	block.prevHash = prevBlock.hash

@@ -5,7 +5,9 @@ import (
 	"github.com/patrickmn/go-cache"
 	"github.com/roycncn/BUChain/config"
 	log "github.com/sirupsen/logrus"
+	"strconv"
 	"sync"
+	"time"
 )
 
 const (
@@ -33,9 +35,13 @@ func NewBlockServer(cfg *config.Config, pipeSet *PipeSet, cacheSet *CacheSet) *b
 
 func (s blockServer) Start() {
 	log.Info("blockServer Start")
+	genesisBlock := NewGenesisBlock()
+	s.ChainCache.Set("CURR_HEIGHT", genesisBlock.index, cache.NoExpiration)
+	s.ChainCache.Set("HEIGHT_"+strconv.FormatInt(genesisBlock.index, 10), genesisBlock, cache.NoExpiration)
 
-	s.wg.Add(1)
+	s.wg.Add(2)
 	go s.doSyncBlock()
+	go s.doAddBlockbyTimer()
 
 }
 
@@ -55,22 +61,43 @@ func (s blockServer) doSyncBlock() {
 		case <-s.quitCh:
 			return
 		case msg := <-syncBlockPipe:
-			newblock := msg.(Block)
+			newblock := msg.(*Block)
 			log.Infof("New Block %v arrive", newblock.index)
 			newblock.isValidNextBlock(s.GetCurrBlock())
-			
+			s.ChainCache.Set("CURR_HEIGHT", newblock.index, cache.NoExpiration)
+			s.ChainCache.Set("HEIGHT_"+strconv.FormatInt(newblock.index, 10), newblock, cache.NoExpiration)
+		}
+	}
+}
+
+func (s blockServer) doAddBlockbyTimer() {
+	defer s.wg.Done()
+	t := time.NewTimer(0)
+	defer t.Stop()
+
+	for {
+		select {
+		case <-s.quitCh:
+			return
+		case <-t.C:
+			t.Reset(time.Second * 5)
+			prevBlock := s.GetCurrBlock()
+			newBlock := NewBlock("TEST", prevBlock)
+			log.Infof("New Block %v produced", newBlock.index)
+			s.SyncBlockPipe.Publish(newBlock)
+
 		}
 	}
 }
 
 func (s blockServer) GetCurrBlock() *Block {
-	height := 0
+	var height int64 = -1
 	block := &Block{}
 	if x, found := s.ChainCache.Get("CURR_HEIGHT"); found {
-		height = x.(int)
+		height = x.(int64)
 	}
-
-	if x, found := s.ChainCache.Get("HEIGHT_" + string(height)); found {
+	key := "HEIGHT_" + strconv.FormatInt(height, 10)
+	if x, found := s.ChainCache.Get(key); found {
 		block = x.(*Block)
 	}
 	return block
