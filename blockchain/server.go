@@ -103,9 +103,9 @@ func (s blockServer) GetCurrBlock() *Block {
 	return block
 }
 
-func (s blockServer) GetBlockByHeight(height int) *Block {
+func (s blockServer) GetBlockByHeight(height int64) *Block {
 	block := &Block{}
-	if x, found := s.ChainCache.Get("HEIGHT_" + string(height)); found {
+	if x, found := s.ChainCache.Get("HEIGHT_" + strconv.FormatInt(height, 10)); found {
 		block = x.(*Block)
 	}
 	return block
