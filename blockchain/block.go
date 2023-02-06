@@ -19,14 +19,15 @@ type Block struct {
 	nonce      int64
 }
 
-func NewBlock(data string, prevBlock *Block) *Block {
+func NewBlock(data string, prevBlock *Block, difficulty int) *Block {
 	block := &Block{}
 	block.index = prevBlock.index + 1
 	block.prevHash = prevBlock.hash
 	block.timestamp = time.Now().Unix()
 	block.data = data
-	block.difficulty = prevBlock.difficulty
+	block.difficulty = difficulty
 
+	block.mineBlock()
 	return block
 }
 
@@ -37,8 +38,10 @@ func NewGenesisBlock() *Block {
 	b.timestamp = time.Now().Unix()
 	b.data = "ROOT"
 	b.nonce = 0
-	b.difficulty = 3
+	b.difficulty = 5
 	//b.hash = sha256.Sum256([]byte(strconv.FormatInt(b.index, 10) + hex.EncodeToString(b.prevHash[:]) + strconv.FormatInt(b.timestamp, 10) + b.data + string(b.difficulty) + strconv.FormatInt(b.nonce, 10)))
+
+	b.mineBlock()
 	return b
 }
 
@@ -57,7 +60,7 @@ func (b *Block) hashMatchDifficulty() bool {
 func (b *Block) mineBlock() {
 	b.nonce = 0
 	for {
-		b.hash = sha256.Sum256([]byte(strconv.FormatInt(b.index, 10) + hex.EncodeToString(b.prevHash[:]) + strconv.FormatInt(b.timestamp, 10) + b.data + strconv.Itoa(b.difficulty) + strconv.FormatInt(b.nonce, 10)))
+		b.hash = sha256.Sum256([]byte(strconv.FormatInt(b.index, 10) + hex.EncodeToString(b.prevHash[:]) + strconv.FormatInt(b.timestamp, 10) + b.data + strconv.FormatInt(b.nonce, 10)))
 		if b.hashMatchDifficulty() {
 			break
 		}
@@ -76,7 +79,7 @@ func (b *Block) isValidNextBlock(prev *Block) bool {
 		return false
 	}
 
-	hash := sha256.Sum256([]byte(strconv.FormatInt(b.index, 10) + hex.EncodeToString(b.prevHash[:]) + strconv.FormatInt(b.timestamp, 10) + b.data))
+	hash := sha256.Sum256([]byte(strconv.FormatInt(b.index, 10) + hex.EncodeToString(b.prevHash[:]) + strconv.FormatInt(b.timestamp, 10) + b.data + strconv.FormatInt(b.nonce, 10)))
 	if b.hash != hash {
 		log.Infof("Wrong Block hash!")
 		return false

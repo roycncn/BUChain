@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewBlock(t *testing.T) {
@@ -25,5 +26,15 @@ func TestMineGenesisBlock(t *testing.T) {
 	NGB.mineBlock()
 	fmt.Println(NGB.nonce)
 	fmt.Println(hex.EncodeToString(NGB.hash[:]))
+
+}
+
+func TestTime(t *testing.T) {
+	a := time.Now().Unix()
+	time.Sleep(5 * time.Second)
+	b := time.Now().Unix()
+
+	println(a)
+	println(b)
 
 }

@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"encoding/hex"
 	"github.com/docker/docker/pkg/pubsub"
 	"github.com/patrickmn/go-cache"
 	"github.com/roycncn/BUChain/config"
@@ -41,7 +42,7 @@ func (s blockServer) Start() {
 
 	s.wg.Add(2)
 	go s.doSyncBlock()
-	go s.doAddBlockbyTimer()
+	//go s.doAddBlockbyTimer()
 
 }
 
@@ -63,9 +64,14 @@ func (s blockServer) doSyncBlock() {
 		case msg := <-syncBlockPipe:
 			newblock := msg.(*Block)
 			log.Infof("New Block %v arrive", newblock.index)
-			newblock.isValidNextBlock(s.GetCurrBlock())
-			s.ChainCache.Set("CURR_HEIGHT", newblock.index, cache.NoExpiration)
-			s.ChainCache.Set("HEIGHT_"+strconv.FormatInt(newblock.index, 10), newblock, cache.NoExpiration)
+
+		default:
+			prevBlock := s.GetCurrBlock()
+			newBlock := NewBlock("TEST", prevBlock, s.GetDifficulty())
+			newBlock.isValidNextBlock(s.GetCurrBlock())
+			s.ChainCache.Set("CURR_HEIGHT", newBlock.index, cache.NoExpiration)
+			s.ChainCache.Set("HEIGHT_"+strconv.FormatInt(newBlock.index, 10), newBlock, cache.NoExpiration)
+			log.Infof("New Block %v, %v Added to chain", newBlock.index, hex.EncodeToString(newBlock.hash[:]))
 		}
 	}
 }
@@ -82,7 +88,7 @@ func (s blockServer) doAddBlockbyTimer() {
 		case <-t.C:
 			t.Reset(time.Second * 5)
 			prevBlock := s.GetCurrBlock()
-			newBlock := NewBlock("TEST", prevBlock)
+			newBlock := NewBlock("TEST", prevBlock, s.GetDifficulty())
 			log.Infof("New Block %v produced", newBlock.index)
 			s.SyncBlockPipe.Publish(newBlock)
 
@@ -109,4 +115,31 @@ func (s blockServer) GetBlockByHeight(height int64) *Block {
 		block = x.(*Block)
 	}
 	return block
+}
+
+func (s blockServer) GetDifficulty() int {
+	latestBlock := s.GetCurrBlock()
+	if latestBlock.index%5 == 0 && latestBlock.index != 0 {
+		return s.GetAdjustedDifficulty()
+	} else {
+		return latestBlock.difficulty
+	}
+
+}
+
+func (s blockServer) GetAdjustedDifficulty() int {
+	latestBlock := s.GetCurrBlock()
+	lastAdjustBlock := s.GetBlockByHeight(latestBlock.index - 4)
+	timeExpected := int64(5)
+	timeTaken := latestBlock.timestamp - lastAdjustBlock.timestamp
+	if timeTaken < timeExpected/2 {
+		log.Infof("Increase Difficulty to %v !", lastAdjustBlock.difficulty+1)
+		return lastAdjustBlock.difficulty + 1
+	} else if timeTaken > timeExpected*2 {
+		log.Infof("Decrease Difficulty to %v !", lastAdjustBlock.difficulty-1)
+		return lastAdjustBlock.difficulty - 1
+	} else {
+		log.Infof("Maintain Difficulty at %v !", lastAdjustBlock.difficulty)
+		return lastAdjustBlock.difficulty
+	}
 }
