@@ -7,6 +7,7 @@ import (
 	"github.com/roycncn/BUChain/config"
 	log "github.com/sirupsen/logrus"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 	"unsafe"
@@ -22,14 +23,10 @@ func byte32(s []byte) (a *[32]byte) {
 	return a
 }
 
-type Resp struct {
-	Result string `json:"result"`
-	Msg    string `json:"msg"`
-}
-
 type HTTPServer struct {
 	mux    *http.ServeMux
 	wg     sync.WaitGroup
+	cfg    *config.Config
 	quitCh chan struct{}
 }
 
@@ -37,9 +34,10 @@ func NewHTTPServer(cfg *config.Config, pipeSet *blockchain.PipeSet, cacheSet *bl
 
 	mux := http.NewServeMux()
 	mux.Handle("/", &indexHandler{cacheSet: cacheSet})
-
+	mux.Handle("/block", &blockHandler{cacheSet: cacheSet, pipeSet: pipeSet})
 	return &HTTPServer{
 		mux:    mux,
+		cfg:    cfg,
 		quitCh: make(chan struct{}),
 	}
 }
@@ -47,7 +45,7 @@ func NewHTTPServer(cfg *config.Config, pipeSet *blockchain.PipeSet, cacheSet *bl
 func (s *HTTPServer) Start() {
 	log.Info("HTTP Server start")
 
-	go http.ListenAndServe(":8001", s.mux)
+	go http.ListenAndServe(":"+s.cfg.RestPort, s.mux)
 
 }
 
@@ -83,4 +81,72 @@ func (h *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	}
 
+}
+
+type blockHandler struct {
+	cacheSet *blockchain.CacheSet
+	pipeSet  *blockchain.PipeSet
+}
+
+func (h *blockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "POST":
+		decoder := json.NewDecoder(r.Body)
+		var newblock *blockchain.Block
+		err := decoder.Decode(&newblock)
+		if err != nil {
+			data := &Resp{Result: RESP_FAILED, Msg: err.Error()}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			log.Errorf("Error happened in Block Unmarshal. Err: %s", err)
+			err := json.NewEncoder(w).Encode(data)
+			if err != nil {
+				return
+			}
+		} else {
+
+			//Publish New Block to Chain without
+			h.pipeSet.SyncBlockPipe.Publish(newblock)
+			data := &Resp{Result: RESP_SUCCESS, Msg: fmt.Sprintf("Block %v Received", newblock.Index)}
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(data)
+		}
+	case "GET":
+		index, _ := strconv.ParseInt(r.URL.Query().Get("index"), 10, 64)
+		curr_index, _ := h.cacheSet.ChainCache.Get("CURR_HEIGHT")
+		curr_index_i64 := curr_index.(int64)
+		if index > curr_index_i64 {
+			//Ask block that we don't have, Failed
+			data := &Resp{Result: RESP_FAILED, Msg: fmt.Sprintf("We don't have such block yet, we are at %v", curr_index_i64)}
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(data)
+		} else {
+
+			x, _ := h.cacheSet.ChainCache.Get("HEIGHT_" + strconv.FormatInt(curr_index_i64, 10))
+			block := x.(*blockchain.Block)
+			data := &RespGetBlock{Result: RESP_SUCCESS, Block: block}
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(data)
+
+		}
+
+	default:
+		data := &Resp{Result: RESP_FAILED, Msg: "Not Allowed"}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		err := json.NewEncoder(w).Encode(data)
+		if err != nil {
+			log.Errorf("Error happened in JSON marshal. Err: %s", err)
+		}
+
+	}
 }

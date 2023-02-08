@@ -10,7 +10,7 @@ import (
 
 func TestNewBlock(t *testing.T) {
 	NGB := NewGenesisBlock()
-	fmt.Println(NGB.hash)
+	fmt.Println(NGB.Hash)
 
 }
 
@@ -23,9 +23,9 @@ func TestCount(t *testing.T) {
 
 func TestMineGenesisBlock(t *testing.T) {
 	NGB := NewGenesisBlock()
-	NGB.mineBlock()
-	fmt.Println(NGB.nonce)
-	fmt.Println(hex.EncodeToString(NGB.hash[:]))
+	NGB.MineBlock()
+	fmt.Println(NGB.Nonce)
+	fmt.Println(hex.EncodeToString(NGB.Hash[:]))
 
 }
 

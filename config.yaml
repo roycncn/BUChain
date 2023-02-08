@@ -1,4 +1,4 @@
-rest_list:  "8001"
+rest_port:  "8001"
 node_port: "3001"
 log_level : "INFO"
 log_output: "./out.log"

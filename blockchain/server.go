@@ -37,8 +37,8 @@ func NewBlockServer(cfg *config.Config, pipeSet *PipeSet, cacheSet *CacheSet) *b
 func (s blockServer) Start() {
 	log.Info("blockServer Start")
 	genesisBlock := NewGenesisBlock()
-	s.ChainCache.Set("CURR_HEIGHT", genesisBlock.index, cache.NoExpiration)
-	s.ChainCache.Set("HEIGHT_"+strconv.FormatInt(genesisBlock.index, 10), genesisBlock, cache.NoExpiration)
+	s.ChainCache.Set("CURR_HEIGHT", genesisBlock.Index, cache.NoExpiration)
+	s.ChainCache.Set("HEIGHT_"+strconv.FormatInt(genesisBlock.Index, 10), genesisBlock, cache.NoExpiration)
 
 	s.wg.Add(2)
 	go s.doSyncBlock()
@@ -63,15 +63,15 @@ func (s blockServer) doSyncBlock() {
 			return
 		case msg := <-syncBlockPipe:
 			newblock := msg.(*Block)
-			log.Infof("New Block %v arrive", newblock.index)
+			log.Infof("New Block %v arrive", newblock.Index)
 
 		default:
 			prevBlock := s.GetCurrBlock()
 			newBlock := NewBlock("TEST", prevBlock, s.GetDifficulty())
 			newBlock.isValidNextBlock(s.GetCurrBlock())
-			s.ChainCache.Set("CURR_HEIGHT", newBlock.index, cache.NoExpiration)
-			s.ChainCache.Set("HEIGHT_"+strconv.FormatInt(newBlock.index, 10), newBlock, cache.NoExpiration)
-			log.Infof("New Block %v, %v Added to chain", newBlock.index, hex.EncodeToString(newBlock.hash[:]))
+			s.ChainCache.Set("CURR_HEIGHT", newBlock.Index, cache.NoExpiration)
+			s.ChainCache.Set("HEIGHT_"+strconv.FormatInt(newBlock.Index, 10), newBlock, cache.NoExpiration)
+			log.Infof("New Block %v, %v Added to chain", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
 		}
 	}
 }
@@ -89,7 +89,7 @@ func (s blockServer) doAddBlockbyTimer() {
 			t.Reset(time.Second * 5)
 			prevBlock := s.GetCurrBlock()
 			newBlock := NewBlock("TEST", prevBlock, s.GetDifficulty())
-			log.Infof("New Block %v produced", newBlock.index)
+			log.Infof("New Block %v produced", newBlock.Index)
 			s.SyncBlockPipe.Publish(newBlock)
 
 		}
@@ -119,27 +119,27 @@ func (s blockServer) GetBlockByHeight(height int64) *Block {
 
 func (s blockServer) GetDifficulty() int {
 	latestBlock := s.GetCurrBlock()
-	if latestBlock.index%5 == 0 && latestBlock.index != 0 {
+	if latestBlock.Index%5 == 0 && latestBlock.Index != 0 {
 		return s.GetAdjustedDifficulty()
 	} else {
-		return latestBlock.difficulty
+		return latestBlock.Difficulty
 	}
 
 }
 
 func (s blockServer) GetAdjustedDifficulty() int {
 	latestBlock := s.GetCurrBlock()
-	lastAdjustBlock := s.GetBlockByHeight(latestBlock.index - 4)
-	timeExpected := int64(5)
-	timeTaken := latestBlock.timestamp - lastAdjustBlock.timestamp
+	lastAdjustBlock := s.GetBlockByHeight(latestBlock.Index - 4)
+	timeExpected := int64(10)
+	timeTaken := latestBlock.Timestamp - lastAdjustBlock.Timestamp
 	if timeTaken < timeExpected/2 {
-		log.Infof("Increase Difficulty to %v !", lastAdjustBlock.difficulty+1)
-		return lastAdjustBlock.difficulty + 1
+		log.Infof("Increase Difficulty to %v !", lastAdjustBlock.Difficulty+1)
+		return lastAdjustBlock.Difficulty + 1
 	} else if timeTaken > timeExpected*2 {
-		log.Infof("Decrease Difficulty to %v !", lastAdjustBlock.difficulty-1)
-		return lastAdjustBlock.difficulty - 1
+		log.Infof("Decrease Difficulty to %v !", lastAdjustBlock.Difficulty-1)
+		return lastAdjustBlock.Difficulty - 1
 	} else {
-		log.Infof("Maintain Difficulty at %v !", lastAdjustBlock.difficulty)
-		return lastAdjustBlock.difficulty
+		log.Infof("Maintain Difficulty at %v !", lastAdjustBlock.Difficulty)
+		return lastAdjustBlock.Difficulty
 	}
 }
