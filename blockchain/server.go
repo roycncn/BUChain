@@ -62,16 +62,25 @@ func (s blockServer) doSyncBlock() {
 		case <-s.quitCh:
 			return
 		case msg := <-syncBlockPipe:
-			newblock := msg.(*Block)
-			log.Infof("New Block %v arrive", newblock.Index)
+			newBlock := msg.(*Block)
+			log.Infof("New Block %v arrive", newBlock.Index)
+			if newBlock.isValidNextBlock(s.GetCurrBlock()) {
+				//STOP MINING
+				s.ChainCache.Set("MINING_STATUS", 0, cache.NoExpiration)
 
+				s.ChainCache.Set("CURR_HEIGHT", newBlock.Index, cache.NoExpiration)
+				s.ChainCache.Set("HEIGHT_"+strconv.FormatInt(newBlock.Index, 10), newBlock, cache.NoExpiration)
+				log.Infof("New Block %v, %v Added to chain", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
+			}
 		default:
 			prevBlock := s.GetCurrBlock()
-			newBlock := NewBlock("TEST", prevBlock, s.GetDifficulty())
-			newBlock.isValidNextBlock(s.GetCurrBlock())
-			s.ChainCache.Set("CURR_HEIGHT", newBlock.Index, cache.NoExpiration)
-			s.ChainCache.Set("HEIGHT_"+strconv.FormatInt(newBlock.Index, 10), newBlock, cache.NoExpiration)
-			log.Infof("New Block %v, %v Added to chain", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
+			newBlock := NewBlock("TEST", prevBlock, s.GetDifficulty(), s.ChainCache)
+			if newBlock != nil && newBlock.isValidNextBlock(s.GetCurrBlock()) {
+				s.ChainCache.Set("CURR_HEIGHT", newBlock.Index, cache.NoExpiration)
+				s.ChainCache.Set("HEIGHT_"+strconv.FormatInt(newBlock.Index, 10), newBlock, cache.NoExpiration)
+				log.Infof("New Block %v, %v Added to chain", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
+			}
+
 		}
 	}
 }
@@ -88,7 +97,7 @@ func (s blockServer) doAddBlockbyTimer() {
 		case <-t.C:
 			t.Reset(time.Second * 5)
 			prevBlock := s.GetCurrBlock()
-			newBlock := NewBlock("TEST", prevBlock, s.GetDifficulty())
+			newBlock := NewBlock("TEST", prevBlock, s.GetDifficulty(), s.ChainCache)
 			log.Infof("New Block %v produced", newBlock.Index)
 			s.SyncBlockPipe.Publish(newBlock)
 

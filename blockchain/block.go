@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/patrickmn/go-cache"
 	log "github.com/sirupsen/logrus"
 	"strconv"
 	"strings"
@@ -21,7 +22,7 @@ type Block struct {
 	Nonce      int64
 }
 
-func NewBlock(data string, prevBlock *Block, difficulty int) *Block {
+func NewBlockWithoutControl(data string, prevBlock *Block, difficulty int) *Block {
 	block := &Block{}
 	block.Index = prevBlock.Index + 1
 	block.PrevHash = prevBlock.Hash
@@ -30,6 +31,18 @@ func NewBlock(data string, prevBlock *Block, difficulty int) *Block {
 	block.Difficulty = difficulty
 
 	block.MineBlock()
+	return block
+}
+
+func NewBlock(data string, prevBlock *Block, difficulty int, minecache *cache.Cache) *Block {
+	block := &Block{}
+	block.Index = prevBlock.Index + 1
+	block.PrevHash = prevBlock.Hash
+	block.Timestamp = time.Now().Unix()
+	block.Data = data
+	block.Difficulty = difficulty
+
+	block.MineBlockWithControl(minecache)
 	return block
 }
 
@@ -64,7 +77,26 @@ func (b *Block) hashMatchDifficulty() bool {
 
 func (b *Block) MineBlock() {
 	b.Nonce = 0
+
 	for {
+
+		b.Hash = sha256.Sum256([]byte(strconv.FormatInt(b.Index, 10) + hex.EncodeToString(b.PrevHash[:]) + strconv.FormatInt(b.Timestamp, 10) + b.Data + strconv.FormatInt(b.Nonce, 10)))
+		if b.hashMatchDifficulty() {
+			break
+		}
+		b.Nonce += 1
+	}
+	return
+}
+
+func (b *Block) MineBlockWithControl(minecache *cache.Cache) {
+	b.Nonce = 0
+	minecache.Set("MINING_STATUS", 1, cache.NoExpiration)
+	for {
+		mineStatus, _ := minecache.Get("MINING_STATUS")
+		if mineStatus != 1 {
+			break
+		}
 		b.Hash = sha256.Sum256([]byte(strconv.FormatInt(b.Index, 10) + hex.EncodeToString(b.PrevHash[:]) + strconv.FormatInt(b.Timestamp, 10) + b.Data + strconv.FormatInt(b.Nonce, 10)))
 		if b.hashMatchDifficulty() {
 			break
