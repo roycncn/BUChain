@@ -8,7 +8,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"strconv"
 	"sync"
-	"time"
 )
 
 const (
@@ -18,9 +17,9 @@ const (
 )
 
 type blockServer struct {
-	quitCh chan struct{}
-	wg     sync.WaitGroup
-
+	quitCh             chan struct{}
+	wg                 sync.WaitGroup
+	cfg                *config.Config
 	ChainCache         *cache.Cache
 	SyncBlockPipe      *pubsub.Publisher
 	BroadcastBlockPipe *pubsub.Publisher
@@ -29,6 +28,7 @@ type blockServer struct {
 func NewBlockServer(cfg *config.Config, pipeSet *PipeSet, cacheSet *CacheSet) *blockServer {
 
 	return &blockServer{
+		cfg:                cfg,
 		quitCh:             make(chan struct{}),
 		ChainCache:         cacheSet.ChainCache,
 		SyncBlockPipe:      pipeSet.SyncBlockPipe,
@@ -44,7 +44,7 @@ func (s blockServer) Start() {
 
 	s.wg.Add(2)
 	go s.doSyncBlock()
-	//go s.doAddBlockbyTimer()
+	go s.doLocalMining()
 
 }
 
@@ -54,6 +54,27 @@ func (s blockServer) Stop() {
 	s.wg.Wait()
 }
 
+func (s blockServer) doLocalMining() {
+	defer s.wg.Done()
+
+	for {
+		select {
+		case <-s.quitCh:
+			return
+		default:
+			prevBlock := s.GetCurrBlock()
+			newBlock := NewBlock("TEST"+string(s.cfg.RestPort), prevBlock, s.GetDifficulty(), s.ChainCache)
+			if newBlock != nil && newBlock.isValidNextBlock(s.GetCurrBlock()) {
+				s.ChainCache.Set("CURR_HEIGHT", newBlock.Index, cache.NoExpiration)
+				s.ChainCache.Set("HEIGHT_"+strconv.FormatInt(newBlock.Index, 10), newBlock, cache.NoExpiration)
+				s.BroadcastBlockPipe.Publish(newBlock)
+				log.Infof("New Block %v, %v Added to chain by Local", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
+			}
+
+		}
+	}
+
+}
 func (s blockServer) doSyncBlock() {
 	defer s.wg.Done()
 	syncBlockPipe := s.SyncBlockPipe.Subscribe()
@@ -69,7 +90,7 @@ func (s blockServer) doSyncBlock() {
 			curr_block := s.GetCurrBlock()
 			if newBlock.Index-curr_block.Index <= 0 {
 				log.Infof("Same Height Block or early Height %v , hash %v", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
-			} else if newBlock.isValidNextBlock(s.GetCurrBlock()) {
+			} else if newBlock.isValidNextBlock(curr_block) {
 				//STOP MINING
 				s.ChainCache.Set("MINING_STATUS", 0, cache.NoExpiration)
 				s.ChainCache.Set("CURR_HEIGHT", newBlock.Index, cache.NoExpiration)
@@ -81,36 +102,6 @@ func (s blockServer) doSyncBlock() {
 				//Same Block or Early blocks arrived. just ignore.
 				log.Infof("Strange New Block %v ignore, hash %v", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
 			}
-		default:
-			prevBlock := s.GetCurrBlock()
-			newBlock := NewBlock("TEST", prevBlock, s.GetDifficulty(), s.ChainCache)
-			if newBlock != nil && newBlock.isValidNextBlock(s.GetCurrBlock()) {
-				s.ChainCache.Set("CURR_HEIGHT", newBlock.Index, cache.NoExpiration)
-				s.ChainCache.Set("HEIGHT_"+strconv.FormatInt(newBlock.Index, 10), newBlock, cache.NoExpiration)
-				s.BroadcastBlockPipe.Publish(newBlock)
-				log.Infof("New Block %v, %v Added to chain by Local", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
-			}
-
-		}
-	}
-}
-
-func (s blockServer) doAddBlockbyTimer() {
-	defer s.wg.Done()
-	t := time.NewTimer(0)
-	defer t.Stop()
-
-	for {
-		select {
-		case <-s.quitCh:
-			return
-		case <-t.C:
-			t.Reset(time.Second * 5)
-			prevBlock := s.GetCurrBlock()
-			newBlock := NewBlock("TEST", prevBlock, s.GetDifficulty(), s.ChainCache)
-			log.Infof("New Block %v produced", newBlock.Index)
-			s.SyncBlockPipe.Publish(newBlock)
-
 		}
 	}
 }

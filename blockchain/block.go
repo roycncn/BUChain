@@ -42,8 +42,12 @@ func NewBlock(data string, prevBlock *Block, difficulty int, minecache *cache.Ca
 	block.Data = data
 	block.Difficulty = difficulty
 
-	block.MineBlockWithControl(minecache)
-	return block
+	if block.MineBlockWithControl(minecache) {
+		return block
+	} else {
+		return nil
+	}
+
 }
 func NewGenesisBlockCalculate() *Block {
 	b := &Block{}
@@ -100,21 +104,21 @@ func (b *Block) MineBlock() {
 	return
 }
 
-func (b *Block) MineBlockWithControl(minecache *cache.Cache) {
+func (b *Block) MineBlockWithControl(minecache *cache.Cache) bool {
 	b.Nonce = 0
 	minecache.Set("MINING_STATUS", 1, cache.NoExpiration)
 	for {
 		mineStatus, _ := minecache.Get("MINING_STATUS")
 		if mineStatus != 1 {
-			break
+			return false
 		}
 		b.Hash = sha256.Sum256([]byte(strconv.FormatInt(b.Index, 10) + hex.EncodeToString(b.PrevHash[:]) + strconv.FormatInt(b.Timestamp, 10) + b.Data + strconv.FormatInt(b.Nonce, 10)))
 		if b.hashMatchDifficulty() {
-			break
+			return true
 		}
 		b.Nonce += 1
 	}
-	return
+
 }
 
 func (b *Block) isValidNextBlock(prev *Block) bool {

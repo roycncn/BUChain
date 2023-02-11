@@ -3,3 +3,5 @@
 .idea/BUChain.iml
 .idea/modules.xml
 .idea/vcs.xml
+/cmd/chaind/chaind.exe
+/cmd/chaind/chaind
