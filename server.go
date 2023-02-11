@@ -22,12 +22,15 @@ func Start(cfg *config.Config) error {
 
 	blockServer := blockchain.NewBlockServer(cfg, pipeSet, cacheSet)
 	httpServer := network.NewHTTPServer(cfg, pipeSet, cacheSet)
+	httpClient := network.NewHTTPClient(cfg, pipeSet, cacheSet)
 	httpServer.Start()
+	httpClient.Start()
 	blockServer.Start() //non block start up
 
 	waitExit()
 
 	blockServer.Stop()
+	httpClient.Stop()
 	httpServer.Stop()
 	log.Infof("Main Server Stopped")
 	return nil

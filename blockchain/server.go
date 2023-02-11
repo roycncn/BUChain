@@ -21,16 +21,18 @@ type blockServer struct {
 	quitCh chan struct{}
 	wg     sync.WaitGroup
 
-	ChainCache    *cache.Cache
-	SyncBlockPipe *pubsub.Publisher
+	ChainCache         *cache.Cache
+	SyncBlockPipe      *pubsub.Publisher
+	BroadcastBlockPipe *pubsub.Publisher
 }
 
 func NewBlockServer(cfg *config.Config, pipeSet *PipeSet, cacheSet *CacheSet) *blockServer {
 
 	return &blockServer{
-		quitCh:        make(chan struct{}),
-		ChainCache:    cacheSet.ChainCache,
-		SyncBlockPipe: pipeSet.SyncBlockPipe,
+		quitCh:             make(chan struct{}),
+		ChainCache:         cacheSet.ChainCache,
+		SyncBlockPipe:      pipeSet.SyncBlockPipe,
+		BroadcastBlockPipe: pipeSet.BroadcastBlockPipe,
 	}
 }
 
@@ -63,14 +65,21 @@ func (s blockServer) doSyncBlock() {
 			return
 		case msg := <-syncBlockPipe:
 			newBlock := msg.(*Block)
-			log.Infof("New Block %v arrive", newBlock.Index)
-			if newBlock.isValidNextBlock(s.GetCurrBlock()) {
+			log.Infof("New Block %v arrive from others. Hash %v ", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
+			curr_block := s.GetCurrBlock()
+			if newBlock.Index-curr_block.Index <= 0 {
+				log.Infof("Same Height Block or early Height %v , hash %v", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
+			} else if newBlock.isValidNextBlock(s.GetCurrBlock()) {
 				//STOP MINING
 				s.ChainCache.Set("MINING_STATUS", 0, cache.NoExpiration)
-
 				s.ChainCache.Set("CURR_HEIGHT", newBlock.Index, cache.NoExpiration)
 				s.ChainCache.Set("HEIGHT_"+strconv.FormatInt(newBlock.Index, 10), newBlock, cache.NoExpiration)
-				log.Infof("New Block %v, %v Added to chain", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
+				log.Infof("New Block %v, %v Added to chain from ohters", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
+			} else if newBlock.Index-curr_block.Index > 1 {
+				log.Infof("New Block %v too high ignore by now, hash %v", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
+			} else {
+				//Same Block or Early blocks arrived. just ignore.
+				log.Infof("Strange New Block %v ignore, hash %v", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
 			}
 		default:
 			prevBlock := s.GetCurrBlock()
@@ -78,7 +87,8 @@ func (s blockServer) doSyncBlock() {
 			if newBlock != nil && newBlock.isValidNextBlock(s.GetCurrBlock()) {
 				s.ChainCache.Set("CURR_HEIGHT", newBlock.Index, cache.NoExpiration)
 				s.ChainCache.Set("HEIGHT_"+strconv.FormatInt(newBlock.Index, 10), newBlock, cache.NoExpiration)
-				log.Infof("New Block %v, %v Added to chain", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
+				s.BroadcastBlockPipe.Publish(newBlock)
+				log.Infof("New Block %v, %v Added to chain by Local", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
 			}
 
 		}
@@ -128,7 +138,7 @@ func (s blockServer) GetBlockByHeight(height int64) *Block {
 
 func (s blockServer) GetDifficulty() int {
 	latestBlock := s.GetCurrBlock()
-	if latestBlock.Index%5 == 0 && latestBlock.Index != 0 {
+	if latestBlock.Index%10 == 0 && latestBlock.Index != 0 {
 		return s.GetAdjustedDifficulty()
 	} else {
 		return latestBlock.Difficulty
@@ -138,8 +148,8 @@ func (s blockServer) GetDifficulty() int {
 
 func (s blockServer) GetAdjustedDifficulty() int {
 	latestBlock := s.GetCurrBlock()
-	lastAdjustBlock := s.GetBlockByHeight(latestBlock.Index - 4)
-	timeExpected := int64(10)
+	lastAdjustBlock := s.GetBlockByHeight(latestBlock.Index - 9)
+	timeExpected := int64(30)
 	timeTaken := latestBlock.Timestamp - lastAdjustBlock.Timestamp
 	if timeTaken < timeExpected/2 {
 		log.Infof("Increase Difficulty to %v !", lastAdjustBlock.Difficulty+1)

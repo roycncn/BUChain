@@ -43,13 +43,14 @@ func NewHTTPServer(cfg *config.Config, pipeSet *blockchain.PipeSet, cacheSet *bl
 }
 
 func (s *HTTPServer) Start() {
-	log.Info("HTTP Server start")
+	log.Info("HTTP Server start : %v", s.cfg.RestPort)
 
 	go http.ListenAndServe(":"+s.cfg.RestPort, s.mux)
 
 }
 
 func (s *HTTPServer) Stop() {
+	log.Info("HTTP Server Stop")
 	close(s.quitCh)
 	s.wg.Wait()
 }
@@ -92,8 +93,8 @@ func (h *blockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
 		decoder := json.NewDecoder(r.Body)
-		var newblock *blockchain.Block
-		err := decoder.Decode(&newblock)
+		var newblockReq *ReqPostBlock
+		err := decoder.Decode(&newblockReq)
 		if err != nil {
 			data := &Resp{Result: RESP_FAILED, Msg: err.Error()}
 			w.Header().Set("Content-Type", "application/json")
@@ -104,10 +105,9 @@ func (h *blockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		} else {
-
 			//Publish New Block to Chain without
-			h.pipeSet.SyncBlockPipe.Publish(newblock)
-			data := &Resp{Result: RESP_SUCCESS, Msg: fmt.Sprintf("Block %v Received", newblock.Index)}
+			h.pipeSet.SyncBlockPipe.Publish(newblockReq.Block)
+			data := &Resp{Result: RESP_SUCCESS, Msg: fmt.Sprintf("Block %v Received", newblockReq.Block.Index)}
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")

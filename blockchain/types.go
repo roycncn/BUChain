@@ -7,7 +7,8 @@ import (
 )
 
 type PipeSet struct {
-	SyncBlockPipe *pubsub.Publisher
+	SyncBlockPipe      *pubsub.Publisher
+	BroadcastBlockPipe *pubsub.Publisher
 }
 
 type CacheSet struct {
@@ -16,7 +17,8 @@ type CacheSet struct {
 
 func NewPipeSet() *PipeSet {
 	return &PipeSet{
-		SyncBlockPipe: pubsub.NewPublisher(100*time.Millisecond, 100),
+		SyncBlockPipe:      pubsub.NewPublisher(100*time.Millisecond, 100),
+		BroadcastBlockPipe: pubsub.NewPublisher(100*time.Millisecond, 100),
 	}
 }
 

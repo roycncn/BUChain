@@ -45,18 +45,29 @@ func NewBlock(data string, prevBlock *Block, difficulty int, minecache *cache.Ca
 	block.MineBlockWithControl(minecache)
 	return block
 }
-
-func NewGenesisBlock() *Block {
+func NewGenesisBlockCalculate() *Block {
 	b := &Block{}
 	b.Index = 0
 	b.PrevHash = [32]byte{}
 	b.Timestamp = time.Now().Unix()
 	b.Data = "ROOT"
 	b.Nonce = 0
-	b.Difficulty = 10
+	b.Difficulty = 20
 	//b.Hash = sha256.Sum256([]byte(strconv.FormatInt(b.Index, 10) + hex.EncodeToString(b.PrevHash[:]) + strconv.FormatInt(b.Timestamp, 10) + b.Data + string(b.Difficulty) + strconv.FormatInt(b.Nonce, 10)))
 
 	b.MineBlock()
+	return b
+}
+
+func NewGenesisBlock() *Block {
+	b := &Block{}
+	b.Index = 0
+	b.PrevHash = [32]byte{}
+	b.Timestamp = 1675996673
+	b.Data = "ROOT"
+	b.Nonce = 1884219
+	b.Difficulty = 20
+	b.Hash = sha256.Sum256([]byte(strconv.FormatInt(b.Index, 10) + hex.EncodeToString(b.PrevHash[:]) + strconv.FormatInt(b.Timestamp, 10) + b.Data + strconv.FormatInt(b.Nonce, 10)))
 	return b
 }
 
@@ -108,17 +119,20 @@ func (b *Block) MineBlockWithControl(minecache *cache.Cache) {
 
 func (b *Block) isValidNextBlock(prev *Block) bool {
 	if prev.Index+1 != b.Index {
-		log.Infof("Wrong Block Index!")
+		log.Infof("Wrong Block Index: Curr index %v hash %v; prev index %v hash %v",
+			b.Index, hex.EncodeToString(b.Hash[:]), prev.Index, hex.EncodeToString(prev.Hash[:]))
 		return false
 	}
 	if prev.Hash != b.PrevHash {
-		log.Infof("Wrong Block prevhash!")
+		log.Infof("Wrong Block prevhash: Curr index %v hash %v; prev index %v hash %v",
+			b.Index, hex.EncodeToString(b.Hash[:]), prev.Index, hex.EncodeToString(prev.Hash[:]))
 		return false
 	}
 
 	hash := sha256.Sum256([]byte(strconv.FormatInt(b.Index, 10) + hex.EncodeToString(b.PrevHash[:]) + strconv.FormatInt(b.Timestamp, 10) + b.Data + strconv.FormatInt(b.Nonce, 10)))
 	if b.Hash != hash {
-		log.Infof("Wrong Block Hash!")
+		log.Infof("Wrong Block Hash!: Curr index %v hash %v; prev index %v hash %v",
+			b.Index, hex.EncodeToString(b.Hash[:]), prev.Index, hex.EncodeToString(prev.Hash[:]))
 		return false
 	}
 

@@ -1,7 +1,6 @@
 package blockchain
 
 import (
-	"encoding/hex"
 	"fmt"
 	"strings"
 	"testing"
@@ -23,9 +22,8 @@ func TestCount(t *testing.T) {
 
 func TestMineGenesisBlock(t *testing.T) {
 	NGB := NewGenesisBlock()
-	NGB.MineBlock()
 	fmt.Println(NGB.Nonce)
-	fmt.Println(hex.EncodeToString(NGB.Hash[:]))
+	fmt.Println(NGB.Hash)
 
 }
 

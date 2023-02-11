@@ -1,0 +1,5 @@
+rest_port:  "8003"
+node_port: "3001"
+log_level : "INFO"
+log_output: "./out-8003.log"
+peers_list: "8002,8001"
