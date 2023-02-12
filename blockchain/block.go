@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/patrickmn/go-cache"
+	"github.com/roycncn/BUChain/tx"
 	log "github.com/sirupsen/logrus"
 	"strconv"
 	"strings"
@@ -13,13 +14,14 @@ import (
 )
 
 type Block struct {
-	Index      int64
-	Hash       [32]byte
-	PrevHash   [32]byte
-	Timestamp  int64
-	Data       string
-	Difficulty int
-	Nonce      int64
+	Index        int64
+	Hash         [32]byte
+	PrevHash     [32]byte
+	Timestamp    int64
+	Transcations []*tx.Transcation
+	Data         string
+	Difficulty   int
+	Nonce        int64
 }
 
 func NewBlockWithoutControl(data string, prevBlock *Block, difficulty int) *Block {
