@@ -2,8 +2,10 @@ package blockchain
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/roycncn/BUChain/tx"
 	"strings"
 	"testing"
 	"time"
@@ -52,4 +54,11 @@ func TestGenPriKey(t *testing.T) {
 	priv := secp256k1.PrivKeyFromBytes(privKeyBytes)
 	fmt.Println(hex.EncodeToString(priv.Serialize()))
 	fmt.Println(hex.EncodeToString(priv.PubKey().SerializeCompressed()))
+}
+
+func TestCoinbase(t *testing.T) {
+	key, _ := secp256k1.GeneratePrivateKey()
+	tx := tx.GetCoinbaseTX(50, key.PubKey())
+	x, _ := json.Marshal(tx)
+	fmt.Println(x)
 }

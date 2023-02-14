@@ -29,6 +29,7 @@ func NewBlockWithoutControl(txs []*tx.Transcation, prevBlock *Block, difficulty 
 	block.Timestamp = time.Now().Unix()
 	block.Transcations = txs
 	block.Difficulty = difficulty
+	block.Transcations = txs
 
 	hasher := sha256.New()
 	for _, tx := range block.Transcations {
@@ -47,6 +48,7 @@ func NewBlock(txs []*tx.Transcation, prevBlock *Block, difficulty int, minecache
 	block.Timestamp = time.Now().Unix()
 	block.Transcations = txs
 	block.Difficulty = difficulty
+	block.Transcations = txs
 
 	hasher := sha256.New()
 	for _, tx := range block.Transcations {

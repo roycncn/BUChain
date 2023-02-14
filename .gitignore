@@ -5,3 +5,6 @@
 .idea/vcs.xml
 /cmd/chaind/chaind.exe
 /cmd/chaind/chaind
+/cmd/chaincli/chaincli.exe
+/cmd/chaincli/chaincli
+

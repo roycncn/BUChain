@@ -28,6 +28,7 @@ type blockServer struct {
 	priv               *secp256k1.PrivateKey
 	Pubkey             *secp256k1.PublicKey
 	ChainCache         *cache.Cache
+	UXTOCache          *cache.Cache
 	SyncBlockPipe      *pubsub.Publisher
 	BroadcastBlockPipe *pubsub.Publisher
 	NewBlockCommitPipe *pubsub.Publisher //For Mempool
@@ -46,6 +47,7 @@ func NewBlockServer(cfg *config.Config, pipeSet *PipeSet, cacheSet *CacheSet) *b
 		cfg:                cfg,
 		quitCh:             make(chan struct{}),
 		ChainCache:         cacheSet.ChainCache,
+		UXTOCache:          cacheSet.UXTOCache,
 		SyncBlockPipe:      pipeSet.SyncBlockPipe,
 		BroadcastBlockPipe: pipeSet.BroadcastBlockPipe,
 		NewBlockCommitPipe: pipeSet.NewBlockCommitPipe,
@@ -64,11 +66,12 @@ func (s blockServer) Start() {
 	s.ChainCache.Set("CURR_HEIGHT", genesisBlock.Index, cache.NoExpiration)
 	s.ChainCache.Set("HEIGHT_"+strconv.FormatInt(genesisBlock.Index, 10), genesisBlock, cache.NoExpiration)
 	heap.Init(&s.memPool)
-	s.wg.Add(3)
+	s.wg.Add(5)
 	go s.doRunMemPool()
 	go s.doSyncBlock()
 	go s.doLocalMining()
-
+	go s.doSyncUXTO()
+	go s.doTimerTest()
 }
 
 func (s blockServer) Stop() {
@@ -87,6 +90,8 @@ func (s blockServer) doLocalMining() {
 		default:
 			prevBlock := s.GetCurrBlock()
 			txs := make([]*tx.Transcation, 0)
+			tx := tx.GetCoinbaseTX(50, s.Pubkey)
+			txs = append(txs, tx)
 			newBlock := NewBlock(txs, prevBlock, s.GetDifficulty(), s.ChainCache)
 			if newBlock != nil && newBlock.isValidNextBlock(s.GetCurrBlock()) {
 				s.ChainCache.Set("CURR_HEIGHT", newBlock.Index, cache.NoExpiration)
@@ -100,6 +105,36 @@ func (s blockServer) doLocalMining() {
 	}
 
 }
+
+func (s blockServer) doSyncUXTO() {
+	defer s.wg.Done()
+	newBlockCommitPipe := s.NewBlockCommitPipe.Subscribe()
+	defer s.NewBlockCommitPipe.Evict(newBlockCommitPipe)
+
+	for {
+		select {
+		case <-s.quitCh:
+			return
+		case msg := <-newBlockCommitPipe:
+			m := msg.(*Block)
+			for _, TX := range m.Transcations {
+
+				for _, txin := range TX.TxIns {
+					s.UXTOCache.Delete(txin.TxOutId + "-" + strconv.Itoa(txin.TxOutIndex))
+				}
+
+				for i, txout := range TX.TxOut {
+					s.UXTOCache.Set(TX.Id+"-"+strconv.Itoa(i),
+						hex.EncodeToString(txout.Address.SerializeCompressed())+"-"+strconv.Itoa(txout.Amount), cache.NoExpiration)
+				}
+
+			}
+
+		}
+	}
+
+}
+
 func (s blockServer) doRunMemPool() {
 	defer s.wg.Done()
 
@@ -134,8 +169,15 @@ func (s blockServer) doRunMemPool() {
 			}
 			s.mempoolLck.Unlock()
 		case msg := <-newTXPipe:
-			s.mempoolLck.Lock()
+
 			m := msg.(*tx.Transcation)
+			check, err := tx.CheckUXTOandCheckSign(m, s.UXTOCache)
+			if !check {
+				log.Errorf("TX check failed %v", err)
+				break
+			}
+
+			s.mempoolLck.Lock()
 			for _, txInPool := range s.memPool {
 				if txInPool.tx.Id == m.Id {
 					s.mempoolLck.Unlock()
@@ -153,6 +195,23 @@ func (s blockServer) doRunMemPool() {
 		}
 	}
 
+}
+
+func (s blockServer) doTimerTest() {
+	defer s.wg.Done()
+	t := time.NewTimer(0)
+	defer t.Stop()
+	for {
+		select {
+		case <-s.quitCh:
+			return
+		case <-t.C:
+			log.Infof("Timer IS WORKING")
+
+			t.Reset(time.Second * 5)
+		}
+
+	}
 }
 
 func (s blockServer) doSyncBlock() {
