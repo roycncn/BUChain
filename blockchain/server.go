@@ -3,6 +3,7 @@ package blockchain
 import (
 	"container/heap"
 	"encoding/hex"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/docker/docker/pkg/pubsub"
 	"github.com/patrickmn/go-cache"
 	"github.com/roycncn/BUChain/config"
@@ -20,11 +21,12 @@ const (
 )
 
 type blockServer struct {
-	quitCh  chan struct{}
-	wg      sync.WaitGroup
-	cfg     *config.Config
-	memPool TXPriorityQueue
-
+	quitCh             chan struct{}
+	wg                 sync.WaitGroup
+	cfg                *config.Config
+	memPool            TXPriorityQueue
+	priv               *secp256k1.PrivateKey
+	Pubkey             *secp256k1.PublicKey
 	ChainCache         *cache.Cache
 	SyncBlockPipe      *pubsub.Publisher
 	BroadcastBlockPipe *pubsub.Publisher
@@ -36,6 +38,9 @@ type blockServer struct {
 }
 
 func NewBlockServer(cfg *config.Config, pipeSet *PipeSet, cacheSet *CacheSet) *blockServer {
+	privByte, _ := hex.DecodeString(cfg.PrivateKey)
+	priv := secp256k1.PrivKeyFromBytes(privByte)
+	pubkey := priv.PubKey()
 
 	return &blockServer{
 		cfg:                cfg,
@@ -43,7 +48,13 @@ func NewBlockServer(cfg *config.Config, pipeSet *PipeSet, cacheSet *CacheSet) *b
 		ChainCache:         cacheSet.ChainCache,
 		SyncBlockPipe:      pipeSet.SyncBlockPipe,
 		BroadcastBlockPipe: pipeSet.BroadcastBlockPipe,
+		NewBlockCommitPipe: pipeSet.NewBlockCommitPipe,
+		NewTXPipe:          pipeSet.NewTXPipe,
+		MempoolSyncPipe:    pipeSet.MempoolSyncPipe,
+		priv:               priv,
+		Pubkey:             pubkey,
 		memPool:            make(TXPriorityQueue, 0),
+		mempoolLck:         new(sync.Mutex),
 	}
 }
 
@@ -75,7 +86,8 @@ func (s blockServer) doLocalMining() {
 			return
 		default:
 			prevBlock := s.GetCurrBlock()
-			newBlock := NewBlock("TEST"+string(s.cfg.RestPort), prevBlock, s.GetDifficulty(), s.ChainCache)
+			txs := make([]*tx.Transcation, 0)
+			newBlock := NewBlock(txs, prevBlock, s.GetDifficulty(), s.ChainCache)
 			if newBlock != nil && newBlock.isValidNextBlock(s.GetCurrBlock()) {
 				s.ChainCache.Set("CURR_HEIGHT", newBlock.Index, cache.NoExpiration)
 				s.ChainCache.Set("HEIGHT_"+strconv.FormatInt(newBlock.Index, 10), newBlock, cache.NoExpiration)
@@ -124,6 +136,14 @@ func (s blockServer) doRunMemPool() {
 		case msg := <-newTXPipe:
 			s.mempoolLck.Lock()
 			m := msg.(*tx.Transcation)
+			for _, txInPool := range s.memPool {
+				if txInPool.tx.Id == m.Id {
+					s.mempoolLck.Unlock()
+					//If the newTX already exist, then we don't add in the mempool
+					break
+				}
+			}
+
 			ptx := &PooledTX{
 				timestamp: time.Now().UnixNano(),
 				tx:        m,

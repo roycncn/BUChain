@@ -1,7 +1,9 @@
 package blockchain
 
 import (
+	"encoding/hex"
 	"fmt"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"strings"
 	"testing"
 	"time"
@@ -35,4 +37,19 @@ func TestTime(t *testing.T) {
 	println(a)
 	println(b)
 
+}
+
+func TestGenPriKey(t *testing.T) {
+	key, err := secp256k1.GeneratePrivateKey()
+	if err != nil {
+		return
+	}
+
+	fmt.Println(hex.EncodeToString(key.Serialize()))
+	fmt.Println(hex.EncodeToString(key.PubKey().SerializeCompressed()))
+
+	privKeyBytes, _ := hex.DecodeString(hex.EncodeToString(key.Serialize()))
+	priv := secp256k1.PrivKeyFromBytes(privKeyBytes)
+	fmt.Println(hex.EncodeToString(priv.Serialize()))
+	fmt.Println(hex.EncodeToString(priv.PubKey().SerializeCompressed()))
 }

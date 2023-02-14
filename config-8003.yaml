@@ -3,3 +3,6 @@ node_port: "3001"
 log_level : "INFO"
 log_output: "./out-8003.log"
 peers_list: "8002,8001"
+private_key: "68cc1a46d5d7af78e000b0780be910442789426c78ba207ef586a1681bd5e48a"
+# Pub: 03c89a1f99b521202cbc702054fef47d323579afb49ffd59a7faed4b60066ea0b4
+

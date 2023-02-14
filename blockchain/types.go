@@ -11,6 +11,9 @@ import (
 type PipeSet struct {
 	SyncBlockPipe      *pubsub.Publisher
 	BroadcastBlockPipe *pubsub.Publisher
+	NewBlockCommitPipe *pubsub.Publisher //For Mempool
+	NewTXPipe          *pubsub.Publisher //For Mempool
+	MempoolSyncPipe    *pubsub.Publisher //For Mempool
 }
 
 type CacheSet struct {
@@ -21,6 +24,9 @@ func NewPipeSet() *PipeSet {
 	return &PipeSet{
 		SyncBlockPipe:      pubsub.NewPublisher(100*time.Millisecond, 100),
 		BroadcastBlockPipe: pubsub.NewPublisher(100*time.Millisecond, 100),
+		NewBlockCommitPipe: pubsub.NewPublisher(100*time.Millisecond, 100),
+		NewTXPipe:          pubsub.NewPublisher(100*time.Millisecond, 100),
+		MempoolSyncPipe:    pubsub.NewPublisher(100*time.Millisecond, 100),
 	}
 }
 

@@ -6,11 +6,12 @@ import (
 )
 
 type Config struct {
-	LogLevel  string `yaml:"log_level"`
-	LogOutput string `yaml:"log_output"`
-	PeersList string `yaml:"peers_list"`
-	NodePort  string `yaml:"node_port"`
-	RestPort  string `yaml:"rest_port"`
+	LogLevel   string `yaml:"log_level"`
+	LogOutput  string `yaml:"log_output"`
+	PeersList  string `yaml:"peers_list"`
+	NodePort   string `yaml:"node_port"`
+	RestPort   string `yaml:"rest_port"`
+	PrivateKey string `yaml:"private_key"`
 }
 
 // Setup init config
