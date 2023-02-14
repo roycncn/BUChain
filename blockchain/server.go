@@ -90,7 +90,7 @@ func (s blockServer) doLocalMining() {
 		default:
 			prevBlock := s.GetCurrBlock()
 			txs := make([]*tx.Transcation, 0)
-			tx := tx.GetCoinbaseTX(50, s.Pubkey)
+			tx := tx.GetCoinbaseTX(50, s.Pubkey, int(prevBlock.Index+1))
 			txs = append(txs, tx)
 			newBlock := NewBlock(txs, prevBlock, s.GetDifficulty(), s.ChainCache)
 			if newBlock != nil && newBlock.isValidNextBlock(s.GetCurrBlock()) {

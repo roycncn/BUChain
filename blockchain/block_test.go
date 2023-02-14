@@ -58,7 +58,7 @@ func TestGenPriKey(t *testing.T) {
 
 func TestCoinbase(t *testing.T) {
 	key, _ := secp256k1.GeneratePrivateKey()
-	tx := tx.GetCoinbaseTX(50, key.PubKey())
+	tx := tx.GetCoinbaseTX(50, key.PubKey(), 1)
 	x, _ := json.Marshal(tx)
 	fmt.Println(x)
 }

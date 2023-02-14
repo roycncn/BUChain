@@ -44,8 +44,9 @@ func (t *Transcation) CalcTxID() string {
 
 }
 
-func GetCoinbaseTX(Amount int, Address *secp256k1.PublicKey) *Transcation {
+func GetCoinbaseTX(Amount int, Address *secp256k1.PublicKey, Height int) *Transcation {
 	tx := &Transcation{}
+	txIn := &TxIn{TxOutIndex: Height}
 
 	txOut := &TxOut{
 		Address: Address,
@@ -53,7 +54,7 @@ func GetCoinbaseTX(Amount int, Address *secp256k1.PublicKey) *Transcation {
 	}
 
 	tx.TxOut = append(tx.TxOut, txOut)
-
+	tx.TxIns = append(tx.TxIns, txIn)
 	tx.CalcTxID()
 	return tx
 
