@@ -3,6 +3,7 @@ package blockchain
 import (
 	"container/heap"
 	"encoding/hex"
+	"fmt"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/docker/docker/pkg/pubsub"
 	"github.com/patrickmn/go-cache"
@@ -10,6 +11,7 @@ import (
 	"github.com/roycncn/BUChain/tx"
 	log "github.com/sirupsen/logrus"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -207,7 +209,18 @@ func (s blockServer) doTimerTest() {
 			return
 		case <-t.C:
 			log.Infof("Timer IS WORKING")
+			balance := make(map[string]int)
+			x := s.UXTOCache.Items()
+			for _, j := range x {
+				str := j.Object.(string)
+				acct := strings.Split(str, "-")
+				temp, _ := strconv.Atoi(acct[1])
+				balance[acct[0]] += temp
+			}
+			for x, y := range balance {
 
+				fmt.Println(x, y)
+			}
 			t.Reset(time.Second * 5)
 		}
 
