@@ -26,7 +26,7 @@ type blockServer struct {
 	quitCh             chan struct{}
 	wg                 sync.WaitGroup
 	cfg                *config.Config
-	memPool            TXPriorityQueue
+	memPool            *TXPriorityQueue
 	priv               *secp256k1.PrivateKey
 	Pubkey             *secp256k1.PublicKey
 	ChainCache         *cache.Cache
@@ -44,7 +44,7 @@ func NewBlockServer(cfg *config.Config, pipeSet *PipeSet, cacheSet *CacheSet) *b
 	privByte, _ := hex.DecodeString(cfg.PrivateKey)
 	priv := secp256k1.PrivKeyFromBytes(privByte)
 	pubkey := priv.PubKey()
-
+	pq := make(TXPriorityQueue, 0)
 	return &blockServer{
 		cfg:                cfg,
 		quitCh:             make(chan struct{}),
@@ -57,7 +57,7 @@ func NewBlockServer(cfg *config.Config, pipeSet *PipeSet, cacheSet *CacheSet) *b
 		MempoolSyncPipe:    pipeSet.MempoolSyncPipe,
 		priv:               priv,
 		Pubkey:             pubkey,
-		memPool:            make(TXPriorityQueue, 0),
+		memPool:            &pq,
 		mempoolLck:         new(sync.Mutex),
 	}
 }
@@ -67,7 +67,7 @@ func (s blockServer) Start() {
 	genesisBlock := NewGenesisBlock()
 	s.ChainCache.Set("CURR_HEIGHT", genesisBlock.Index, cache.NoExpiration)
 	s.ChainCache.Set("HEIGHT_"+strconv.FormatInt(genesisBlock.Index, 10), genesisBlock, cache.NoExpiration)
-	heap.Init(&s.memPool)
+	heap.Init(s.memPool)
 	s.wg.Add(5)
 	go s.doRunMemPool()
 	go s.doSyncBlock()
@@ -92,8 +92,15 @@ func (s blockServer) doLocalMining() {
 		default:
 			prevBlock := s.GetCurrBlock()
 			txs := make([]*tx.Transcation, 0)
-			tx := tx.GetCoinbaseTX(50, s.Pubkey, int(prevBlock.Index+1))
-			txs = append(txs, tx)
+			transcation := tx.GetCoinbaseTX(50, s.Pubkey, int(prevBlock.Index+1))
+			txs = append(txs, transcation)
+			s.mempoolLck.Lock()
+			log.Infof("Current mempool length %d", s.memPool.Len())
+			for i := 0; i < 10 && s.memPool.Len() > 0; i++ {
+				pooledtx := s.memPool.Pop().(*PooledTX)
+				txs = append(txs, pooledtx.tx)
+			}
+			s.mempoolLck.Unlock()
 			newBlock := NewBlock(txs, prevBlock, s.GetDifficulty(), s.ChainCache)
 			if newBlock != nil && newBlock.isValidNextBlock(s.GetCurrBlock()) {
 				s.ChainCache.Set("CURR_HEIGHT", newBlock.Index, cache.NoExpiration)
@@ -148,13 +155,14 @@ func (s blockServer) doRunMemPool() {
 	defer s.NewBlockCommitPipe.Evict(newBlockCommitPipe)
 	defer s.NewTXPipe.Evict(newTXPipe)
 
+out:
 	for {
 		select {
 		case <-s.quitCh:
 			return
 		case msg := <-mempoolSyncPipe:
 			s.mempoolLck.Lock()
-			m := msg.(TXPriorityQueue)
+			m := msg.(*TXPriorityQueue)
 			s.memPool = m
 			//delete invalid
 			s.mempoolLck.Unlock()
@@ -163,9 +171,9 @@ func (s blockServer) doRunMemPool() {
 			//If TX in block then remove
 			s.mempoolLck.Lock()
 			for _, TX := range m.Transcations {
-				for _, txInPool := range s.memPool {
+				for _, txInPool := range *s.memPool {
 					if txInPool.tx.Id == TX.Id {
-						heap.Remove(&s.memPool, txInPool.index)
+						heap.Remove(s.memPool, txInPool.index)
 					}
 				}
 			}
@@ -180,11 +188,12 @@ func (s blockServer) doRunMemPool() {
 			}
 
 			s.mempoolLck.Lock()
-			for _, txInPool := range s.memPool {
+			for _, txInPool := range *s.memPool {
 				if txInPool.tx.Id == m.Id {
 					s.mempoolLck.Unlock()
 					//If the newTX already exist, then we don't add in the mempool
-					break
+					log.Infof("SKIP TX %v  @ %v", m.Id)
+					break out
 				}
 			}
 
@@ -192,8 +201,10 @@ func (s blockServer) doRunMemPool() {
 				timestamp: time.Now().UnixNano(),
 				tx:        m,
 			}
-			heap.Push(&s.memPool, ptx)
+
+			heap.Push(s.memPool, ptx)
 			s.mempoolLck.Unlock()
+			log.Infof("A TX %v added to memPOOL @ %v", ptx.tx.Id, ptx.timestamp)
 		}
 	}
 
@@ -208,14 +219,45 @@ func (s blockServer) doTimerTest() {
 		case <-s.quitCh:
 			return
 		case <-t.C:
+
 			log.Infof("Timer IS WORKING")
 			balance := make(map[string]int)
 			x := s.UXTOCache.Items()
-			for _, j := range x {
+			for i, j := range x {
+
 				str := j.Object.(string)
 				acct := strings.Split(str, "-")
+
 				temp, _ := strconv.Atoi(acct[1])
 				balance[acct[0]] += temp
+
+				txout := strings.Split(i, "-")
+				temp2, _ := strconv.Atoi(txout[1])
+
+				pubkeybyte, _ := hex.DecodeString("02e90c589d434fe3b70f11bea48bf54922c46646a82d4418d3d9ed16f258a7f88b")
+				recvpubkey, _ := secp256k1.ParsePubKey(pubkeybyte)
+
+				if balance[acct[0]] > 150 {
+					txIns := []*tx.TxIn{{
+						TxOutId:    txout[0],
+						TxOutIndex: temp2,
+						Sig:        nil,
+					}}
+
+					txOuts := []*tx.TxOut{{
+						Address: recvpubkey,
+						Amount:  50,
+					}}
+					transcation := &tx.Transcation{
+						Id:    "",
+						TxIns: txIns,
+						TxOut: txOuts,
+					}
+
+					transcation.Id = transcation.CalcTxID()
+					tx.CheckAndSignTxIn(s.priv, transcation, s.UXTOCache)
+					s.NewTXPipe.Publish(transcation)
+				}
 			}
 			for x, y := range balance {
 

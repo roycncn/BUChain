@@ -62,13 +62,12 @@ func GetCoinbaseTX(Amount int, Address *secp256k1.PublicKey, Height int) *Transc
 
 func CheckUXTOandCheckSign(tx *Transcation, UXTOEntries *cache.Cache) (bool, error) {
 	for _, txIn := range tx.TxIns {
-		if uxto, found := UXTOEntries.Get(txIn.TxOutId + "-" + string(txIn.TxOutIndex)); found {
+		if uxto, found := UXTOEntries.Get(txIn.TxOutId + "-" + strconv.Itoa(txIn.TxOutIndex)); found {
 			pubkeystr := uxto.(string)
 			pubkeybyte, _ := hex.DecodeString(strings.Split(pubkeystr, "-")[0])
 			pubkey, _ := secp256k1.ParsePubKey(pubkeybyte)
-			txidbyte, _ := hex.DecodeString(txIn.TxOutId)
 			sig, _ := ecdsa.ParseDERSignature(txIn.Sig)
-			if sig.Verify(txidbyte, pubkey) == false {
+			if sig.Verify([]byte(txIn.TxOutId), pubkey) == false {
 				return false, errors.New("Sig Wrong")
 			}
 		} else {
@@ -82,14 +81,14 @@ func CheckUXTOandCheckSign(tx *Transcation, UXTOEntries *cache.Cache) (bool, err
 	return true, nil
 }
 
-func CheckAndSignTxIn(priv *secp256k1.PrivateKey, tx *Transcation, txInIndex int, UXTOEntries *cache.Cache) (*ecdsa.Signature, error) {
+func CheckAndSignTxIn(priv *secp256k1.PrivateKey, tx *Transcation, UXTOEntries *cache.Cache) error {
 	for _, txIn := range tx.TxIns {
-		if _, found := UXTOEntries.Get(txIn.TxOutId + "-" + string(txIn.TxOutIndex)); found {
-
+		if _, found := UXTOEntries.Get(txIn.TxOutId + "-" + strconv.Itoa(txIn.TxOutIndex)); found {
+			sig := ecdsa.Sign(priv, []byte(txIn.TxOutId))
+			txIn.Sig = sig.Serialize()
 		} else {
-			return &ecdsa.Signature{}, errors.New("Can't Find Such UXTO!")
+			return errors.New("Can't Find Such UXTO!")
 		}
 	}
-	sig := ecdsa.Sign(priv, []byte(tx.Id))
-	return sig, nil
+	return nil
 }

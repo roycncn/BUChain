@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
 	"github.com/roycncn/BUChain/tx"
 	"strings"
 	"testing"
@@ -54,6 +55,41 @@ func TestGenPriKey(t *testing.T) {
 	priv := secp256k1.PrivKeyFromBytes(privKeyBytes)
 	fmt.Println(hex.EncodeToString(priv.Serialize()))
 	fmt.Println(hex.EncodeToString(priv.PubKey().SerializeCompressed()))
+}
+
+func TestSign(t *testing.T) {
+	key, err := secp256k1.GeneratePrivateKey()
+	if err != nil {
+		return
+	}
+
+	fmt.Println(hex.EncodeToString(key.Serialize()))
+	fmt.Println(hex.EncodeToString(key.PubKey().SerializeCompressed()))
+
+	privKeyBytes, _ := hex.DecodeString(hex.EncodeToString(key.Serialize()))
+	priv := secp256k1.PrivKeyFromBytes(privKeyBytes)
+	fmt.Println(hex.EncodeToString(priv.Serialize()))
+	fmt.Println(hex.EncodeToString(priv.PubKey().SerializeCompressed()))
+
+	sig := ecdsa.Sign(priv, []byte("aabbccdd"))
+	temp := sig.Serialize()
+
+	pubkeystr := hex.EncodeToString(key.PubKey().SerializeCompressed())
+	pubkeybyte, _ := hex.DecodeString(pubkeystr)
+	pubkey, _ := secp256k1.ParsePubKey(pubkeybyte)
+	sigsig, _ := ecdsa.ParseDERSignature(temp)
+	if sigsig.Verify([]byte("aabbccdd"), pubkey) == false {
+		fmt.Println("NOT OK")
+	} else {
+		fmt.Println("OK")
+	}
+}
+
+func TestByte(t *testing.T) {
+	a := []byte("yatao5886")
+	b, _ := hex.DecodeString("z")
+	fmt.Println(a, b)
+
 }
 
 func TestCoinbase(t *testing.T) {
