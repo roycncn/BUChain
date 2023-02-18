@@ -1,13 +1,17 @@
 package network
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+
 	"github.com/roycncn/BUChain/blockchain"
 	"github.com/roycncn/BUChain/config"
 	log "github.com/sirupsen/logrus"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -36,6 +40,9 @@ func NewHTTPServer(cfg *config.Config, pipeSet *blockchain.PipeSet, cacheSet *bl
 	mux.Handle("/", &indexHandler{cacheSet: cacheSet})
 	mux.Handle("/block", &blockHandler{cacheSet: cacheSet, pipeSet: pipeSet})
 	mux.Handle("/chain", &chainHandler{cacheSet: cacheSet, pipeSet: pipeSet})
+
+	//User Side
+	mux.Handle("/wallet", &walletHandler{cacheSet: cacheSet, pipeSet: pipeSet})
 	return &HTTPServer{
 		mux:    mux,
 		cfg:    cfg,
@@ -128,7 +135,6 @@ func (h *blockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(data)
 		} else {
-
 			x, _ := h.cacheSet.ChainCache.Get("HEIGHT_" + strconv.FormatInt(curr_index_i64, 10))
 			block := x.(*blockchain.Block)
 			data := &RespGetBlock{Result: RESP_SUCCESS, Block: block}
@@ -160,17 +166,98 @@ type chainHandler struct {
 func (h *chainHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-
 		x := h.cacheSet.ChainCache.Items()
-		//curr_chain := make(map[string]*cache.Item)
-		//
-		//for i,j := range x {
-		////	if strings.HasPrefix(i,"HEIGHT_"){
-		//		curr_chain[i]= j.Object.(*blockchain.Block)
-		////	}
-		//
-		//}
 		data := &RespGetChain{Result: RESP_SUCCESS, Chain: x}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(data)
+
+	default:
+		data := &Resp{Result: RESP_FAILED, Msg: "Not Allowed"}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		err := json.NewEncoder(w).Encode(data)
+		if err != nil {
+			log.Errorf("Error happened in JSON marshal. Err: %s", err)
+		}
+
+	}
+}
+
+type walletHandler struct {
+	cacheSet *blockchain.CacheSet
+	pipeSet  *blockchain.PipeSet
+}
+
+func (h *walletHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "POST":
+		decoder := json.NewDecoder(r.Body)
+		var postWallet *ReqPostWallet
+		err := decoder.Decode(&postWallet)
+		if err != nil {
+			data := &Resp{Result: RESP_FAILED, Msg: err.Error()}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			log.Errorf("Error happened in Block Unmarshal. Err: %s", err)
+			err := json.NewEncoder(w).Encode(data)
+			if err != nil {
+				return
+			}
+		} else {
+			var data *Resp
+			balance := make(map[string]int)
+			record := make(map[string][]string)
+			x := h.cacheSet.UXTOCache.Items()
+			for i, j := range x {
+				str := j.Object.(string)
+				acct := strings.Split(str, "-")
+				temp, _ := strconv.Atoi(acct[1])
+				balance[acct[0]] += temp
+				record[postWallet.FromAddr] = append(record[postWallet.FromAddr], i+", Amount"+acct[1])
+
+			}
+
+			privKeyBytes, _ := hex.DecodeString(postWallet.Private)
+			priv := secp256k1.PrivKeyFromBytes(privKeyBytes)
+			if hex.EncodeToString(priv.PubKey().SerializeCompressed()) != postWallet.FromAddr {
+				data = &Resp{
+					Result: RESP_FAILED,
+					Msg:    fmt.Sprintf("Given Wrong PK for Address: %v ", postWallet.FromAddr)}
+			} else if balance[postWallet.FromAddr] < postWallet.Amount {
+				data = &Resp{
+					Result: RESP_FAILED,
+					Msg: fmt.Sprintf("Address: %v Balance %d. Not enought to pay Amount %d",
+						postWallet.FromAddr, balance[postWallet.FromAddr], postWallet.Amount)}
+			} else {
+				data = &Resp{
+					Result: RESP_SUCCESS,
+					Msg:    "OK"}
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(data)
+		}
+	case "GET":
+		addr := r.URL.Query().Get("addr")
+		balance := make(map[string]int)
+		record := make(map[string][]string)
+		x := h.cacheSet.UXTOCache.Items()
+		for i, j := range x {
+			str := j.Object.(string)
+			acct := strings.Split(str, "-")
+			temp, _ := strconv.Atoi(acct[1])
+			balance[acct[0]] += temp
+			record[acct[0]] = append(record[acct[0]], i+", Amount"+acct[1])
+
+		}
+
+		data := &Resp{Result: RESP_SUCCESS, Msg: fmt.Sprintf("Address: %v Balance %d. Useable vin %v", addr, balance[addr], record[addr])}
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")

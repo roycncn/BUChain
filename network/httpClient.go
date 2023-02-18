@@ -108,7 +108,25 @@ func (s *HTTPClient) doGetChain() {
 					if err != nil {
 						log.Errorf("GET CHAIN RESUT error, result :%v", peer, err.Error())
 					} else {
-						s.cacheSet.ChainCache = cache.NewFrom(5*time.Minute, 10*time.Minute, getBlockResp.Chain)
+						log.Infof("Chain Addr before repace %v", s.cacheSet.ChainCache)
+						newCache := cache.New(5*time.Minute, 10*time.Minute)
+						s.cacheSet.UXTOCache = cache.New(5*time.Minute, 10*time.Minute)
+						for i, j := range getBlockResp.Chain {
+							if strings.HasPrefix(i, "CURR_HEIGHT") {
+								newCache.Set("CURR_HEIGHT", int64(j.Object.(float64)), cache.NoExpiration)
+							} else if strings.HasPrefix(i, "HEIGHT_") {
+								block := &blockchain.Block{}
+								tmp, _ := json.Marshal(j.Object)
+								json.Unmarshal(tmp, block)
+								s.pipeSet.NewBlockCommitPipe.Publish(block)
+								newCache.Set(i, block, cache.NoExpiration)
+							} else if strings.HasPrefix(i, "MINING_STATUS") {
+								newCache.Set(i, int(j.Object.(float64)), cache.NoExpiration)
+							}
+						}
+
+						s.cacheSet.ChainCache = newCache
+						log.Infof("Repacing Chain %v", s.cacheSet.ChainCache)
 					}
 				}
 

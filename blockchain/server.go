@@ -3,7 +3,6 @@ package blockchain
 import (
 	"container/heap"
 	"encoding/hex"
-	"fmt"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/docker/docker/pkg/pubsub"
 	"github.com/patrickmn/go-cache"
@@ -28,8 +27,7 @@ type blockServer struct {
 	memPool            *TXPriorityQueue
 	priv               *secp256k1.PrivateKey
 	Pubkey             *secp256k1.PublicKey
-	ChainCache         *cache.Cache
-	UXTOCache          *cache.Cache
+	cacheSet           *CacheSet
 	SyncBlockPipe      *pubsub.Publisher
 	BroadcastBlockPipe *pubsub.Publisher
 	GetChainPipe       *pubsub.Publisher
@@ -48,8 +46,7 @@ func NewBlockServer(cfg *config.Config, pipeSet *PipeSet, cacheSet *CacheSet) *b
 	return &blockServer{
 		cfg:                cfg,
 		quitCh:             make(chan struct{}),
-		ChainCache:         cacheSet.ChainCache,
-		UXTOCache:          cacheSet.UXTOCache,
+		cacheSet:           cacheSet,
 		SyncBlockPipe:      pipeSet.SyncBlockPipe,
 		BroadcastBlockPipe: pipeSet.BroadcastBlockPipe,
 		NewBlockCommitPipe: pipeSet.NewBlockCommitPipe,
@@ -66,8 +63,8 @@ func NewBlockServer(cfg *config.Config, pipeSet *PipeSet, cacheSet *CacheSet) *b
 func (s blockServer) Start() {
 	log.Info("blockServer Start")
 	genesisBlock := NewGenesisBlock()
-	s.ChainCache.Set("CURR_HEIGHT", genesisBlock.Index, cache.NoExpiration)
-	s.ChainCache.Set("HEIGHT_"+strconv.FormatInt(genesisBlock.Index, 10), genesisBlock, cache.NoExpiration)
+	s.cacheSet.ChainCache.Set("CURR_HEIGHT", genesisBlock.Index, cache.NoExpiration)
+	s.cacheSet.ChainCache.Set("HEIGHT_"+strconv.FormatInt(genesisBlock.Index, 10), genesisBlock, cache.NoExpiration)
 	heap.Init(s.memPool)
 	s.wg.Add(5)
 	go s.doRunMemPool()
@@ -102,13 +99,13 @@ func (s blockServer) doLocalMining() {
 				txs = append(txs, pooledtx.tx)
 			}
 			s.mempoolLck.Unlock()
-			newBlock := NewBlock(txs, prevBlock, s.GetDifficulty(), s.ChainCache)
+			newBlock := NewBlock(txs, prevBlock, s.GetDifficulty(), s.cacheSet.ChainCache)
 			if newBlock != nil && newBlock.isValidNextBlock(s.GetCurrBlock()) {
-				s.ChainCache.Set("CURR_HEIGHT", newBlock.Index, cache.NoExpiration)
-				s.ChainCache.Set("HEIGHT_"+strconv.FormatInt(newBlock.Index, 10), newBlock, cache.NoExpiration)
+				s.cacheSet.ChainCache.Set("CURR_HEIGHT", newBlock.Index, cache.NoExpiration)
+				s.cacheSet.ChainCache.Set("HEIGHT_"+strconv.FormatInt(newBlock.Index, 10), newBlock, cache.NoExpiration)
 				s.BroadcastBlockPipe.Publish(newBlock)
 				s.NewBlockCommitPipe.Publish(newBlock)
-				log.Infof("New Block %v, %v Added to chain by Local", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
+				log.Infof("New Block %v, %v Added to chain by Local ,cache addr %v", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]), s.cacheSet.ChainCache)
 			}
 
 		}
@@ -130,14 +127,11 @@ func (s blockServer) doSyncUXTO() {
 			for _, TX := range m.Transcations {
 
 				for _, txin := range TX.TxIns {
-					s.UXTOCache.Delete(txin.TxOutId + "-" + strconv.Itoa(txin.TxOutIndex))
+					s.cacheSet.UXTOCache.Delete(txin.TxOutId + "-" + strconv.Itoa(txin.TxOutIndex))
 				}
 
 				for i, txout := range TX.TxOut {
-					if hex.EncodeToString(txout.Address) != "039d95813a47234fe889729ff94efa4bb170e4190ba4157f837a68621458018638" {
-						println("BREAK")
-					}
-					s.UXTOCache.Set(TX.Id+"-"+strconv.Itoa(i),
+					s.cacheSet.UXTOCache.Set(TX.Id+"-"+strconv.Itoa(i),
 						hex.EncodeToString(txout.Address)+"-"+strconv.Itoa(txout.Amount), cache.NoExpiration)
 				}
 
@@ -185,7 +179,7 @@ out:
 		case msg := <-newTXPipe:
 
 			m := msg.(*tx.Transcation)
-			check, err := tx.CheckUXTOandCheckSign(m, s.UXTOCache)
+			check, err := tx.CheckUXTOandCheckSign(m, s.cacheSet.UXTOCache)
 			if !check {
 				log.Errorf("TX check failed %v", err)
 				break
@@ -196,7 +190,7 @@ out:
 				if txInPool.tx.Id == m.Id {
 					s.mempoolLck.Unlock()
 					//If the newTX already exist, then we don't add in the mempool
-					log.Infof("SKIP TX %v  @ %v", m.Id)
+					log.Infof("SKIP TX %v ", m.Id)
 					break out
 				}
 			}
@@ -217,59 +211,57 @@ out:
 func (s blockServer) doTimerTest() {
 	defer s.wg.Done()
 	t := time.NewTimer(0)
-	t1 := time.NewTimer(0)
-	defer t1.Stop()
+	defer t.Stop()
 	for {
 		select {
 		case <-s.quitCh:
 			return
 		case <-t.C:
-			log.Infof("Timer IS WORKING")
+			//log.Infof("Timer IS WORKING")
 			//balance := make(map[string]int)
-			x := s.UXTOCache.Items()
-			for i, j := range x {
-				fmt.Println(i, j.Object.(string))
-				/*			str := j.Object.(string)
-							acct := strings.Split(str, "-")
+			//x := s.cacheSet.UXTOCache.Items()
+			//for i, j := range x {
+			//fmt.Println(i, j.Object.(string))
+			/*			str := j.Object.(string)
+						acct := strings.Split(str, "-")
 
-							temp, _ := strconv.Atoi(acct[1])
-							balance[acct[0]] += temp*/
-				/*
-					txout := strings.Split(i, "-")
-					temp2, _ := strconv.Atoi(txout[1])
+						temp, _ := strconv.Atoi(acct[1])
+						balance[acct[0]] += temp*/
+			/*
+				txout := strings.Split(i, "-")
+				temp2, _ := strconv.Atoi(txout[1])
 
-					pubkeybyte, _ := hex.DecodeString("02e90c589d434fe3b70f11bea48bf54922c46646a82d4418d3d9ed16f258a7f88b")
-					recvpubkey, _ := secp256k1.ParsePubKey(pubkeybyte)
+				pubkeybyte, _ := hex.DecodeString("02e90c589d434fe3b70f11bea48bf54922c46646a82d4418d3d9ed16f258a7f88b")
+				recvpubkey, _ := secp256k1.ParsePubKey(pubkeybyte)
 
-					if balance[acct[0]] > 150 {
-						txIns := []*tx.TxIn{{
-							TxOutId:    txout[0],
-							TxOutIndex: temp2,
-							Sig:        nil,
-						}}
+				if balance[acct[0]] > 150 {
+					txIns := []*tx.TxIn{{
+						TxOutId:    txout[0],
+						TxOutIndex: temp2,
+						Sig:        nil,
+					}}
 
-						txOuts := []*tx.TxOut{{
-							Address: recvpubkey,
-							Amount:  50,
-						}}
-						transcation := &tx.Transcation{
-							Id:    "",
-							TxIns: txIns,
-							TxOut: txOuts,
-						}
+					txOuts := []*tx.TxOut{{
+						Address: recvpubkey,
+						Amount:  50,
+					}}
+					transcation := &tx.Transcation{
+						Id:    "",
+						TxIns: txIns,
+						TxOut: txOuts,
+					}
 
-						transcation.Id = transcation.CalcTxID()
-						tx.CheckAndSignTxIn(s.priv, transcation, s.UXTOCache)
-						s.NewTXPipe.Publish(transcation)
-					}*/
-			}
-			/*			for x, y := range balance {
-						fmt.Println(x, y)
-					}*/
-			t.Reset(time.Second * 5)
+					transcation.Id = transcation.CalcTxID()
+					tx.CheckAndSignTxIn(s.priv, transcation, s.UXTOCache)
+					s.NewTXPipe.Publish(transcation)
+				}*/
 		}
-
+		/*			for x, y := range balance {
+					fmt.Println(x, y)
+				}*/
+		t.Reset(time.Second * 5)
 	}
+
 }
 
 func (s blockServer) doSyncBlock() {
@@ -287,16 +279,19 @@ func (s blockServer) doSyncBlock() {
 			curr_block := s.GetCurrBlock()
 			if newBlock.Index-curr_block.Index <= 0 {
 				log.Infof("Same Height Block or early Height %v , hash %v", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
+			} else if newBlock.Index-curr_block.Index > 1 {
+				log.Infof("New Block %v too high, trigger replacechain, hash %v", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
+				s.GetChainPipe.Publish("GO")
+				time.Sleep(2 * time.Second)
+				log.Infof("Current chain cache %v", s.cacheSet.ChainCache)
+
 			} else if newBlock.isValidNextBlock(curr_block) {
 				//STOP MINING
-				s.ChainCache.Set("MINING_STATUS", 0, cache.NoExpiration)
-				s.ChainCache.Set("CURR_HEIGHT", newBlock.Index, cache.NoExpiration)
-				s.ChainCache.Set("HEIGHT_"+strconv.FormatInt(newBlock.Index, 10), newBlock, cache.NoExpiration)
+				s.cacheSet.ChainCache.Set("MINING_STATUS", 0, cache.NoExpiration)
+				s.cacheSet.ChainCache.Set("CURR_HEIGHT", newBlock.Index, cache.NoExpiration)
+				s.cacheSet.ChainCache.Set("HEIGHT_"+strconv.FormatInt(newBlock.Index, 10), newBlock, cache.NoExpiration)
 				s.NewBlockCommitPipe.Publish(newBlock)
 				log.Infof("New Block %v, %v Added to chain from ohters", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
-			} else if newBlock.Index-curr_block.Index > 1 {
-				s.GetChainPipe.Publish("GO")
-				log.Infof("New Block %v too high ignore by now, hash %v", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
 			} else {
 				//Same Block or Early blocks arrived. just ignore.
 				log.Infof("Strange New Block %v ignore, hash %v", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
@@ -308,11 +303,11 @@ func (s blockServer) doSyncBlock() {
 func (s blockServer) GetCurrBlock() *Block {
 	var height int64 = -1
 	block := &Block{}
-	if x, found := s.ChainCache.Get("CURR_HEIGHT"); found {
+	if x, found := s.cacheSet.ChainCache.Get("CURR_HEIGHT"); found {
 		height = x.(int64)
 	}
 	key := "HEIGHT_" + strconv.FormatInt(height, 10)
-	if x, found := s.ChainCache.Get(key); found {
+	if x, found := s.cacheSet.ChainCache.Get(key); found {
 		block = x.(*Block)
 	}
 	return block
@@ -320,7 +315,7 @@ func (s blockServer) GetCurrBlock() *Block {
 
 func (s blockServer) GetBlockByHeight(height int64) *Block {
 	block := &Block{}
-	if x, found := s.ChainCache.Get("HEIGHT_" + strconv.FormatInt(height, 10)); found {
+	if x, found := s.cacheSet.ChainCache.Get("HEIGHT_" + strconv.FormatInt(height, 10)); found {
 		block = x.(*Block)
 	}
 	return block
