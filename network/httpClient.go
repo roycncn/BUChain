@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/patrickmn/go-cache"
 	"github.com/roycncn/BUChain/blockchain"
 	"github.com/roycncn/BUChain/config"
 	log "github.com/sirupsen/logrus"
@@ -37,8 +38,9 @@ func NewHTTPClient(cfg *config.Config, pipeSet *blockchain.PipeSet, cacheSet *bl
 func (s *HTTPClient) Start() {
 	log.Info("HTTP Client Start")
 
-	s.wg.Add(1)
+	s.wg.Add(2)
 	go s.doBroadcastBlock()
+	go s.doGetChain()
 
 }
 
@@ -72,6 +74,42 @@ func (s *HTTPClient) doBroadcastBlock() {
 					log.Infof("New Block %v broadcast to peer %v Err :%v", newBlock.Index, peer, err.Error())
 				} else {
 					log.Infof("New Block %v broadcast to peer %v result :%v", newBlock.Index, peer, resp.StatusCode)
+				}
+
+			}
+
+		}
+	}
+}
+
+func (s *HTTPClient) doGetChain() {
+	defer s.wg.Done()
+	getChainPipe := s.pipeSet.GetChainPipe.Subscribe()
+	defer s.pipeSet.GetChainPipe.Evict(getChainPipe)
+
+	for {
+		select {
+		case <-s.quitCh:
+			return
+		case <-getChainPipe:
+			log.Infof("Asking for blocks")
+			for _, peer := range s.peers {
+
+				requestURL := fmt.Sprintf("http://127.0.0.1:%v/chain", peer)
+				req, _ := http.NewRequest(http.MethodGet, requestURL, nil)
+				client := &http.Client{Timeout: 50 * time.Millisecond}
+				resp, err := client.Do(req)
+				if err != nil {
+					log.Errorf("GET CHAIN REQ broadcast to peer %v result :%v", peer, err.Error())
+				} else {
+					decoder := json.NewDecoder(resp.Body)
+					var getBlockResp *RespGetChain
+					err := decoder.Decode(&getBlockResp)
+					if err != nil {
+						log.Errorf("GET CHAIN RESUT error, result :%v", peer, err.Error())
+					} else {
+						s.cacheSet.ChainCache = cache.NewFrom(5*time.Minute, 10*time.Minute, getBlockResp.Chain)
+					}
 				}
 
 			}

@@ -35,6 +35,7 @@ func NewHTTPServer(cfg *config.Config, pipeSet *blockchain.PipeSet, cacheSet *bl
 	mux := http.NewServeMux()
 	mux.Handle("/", &indexHandler{cacheSet: cacheSet})
 	mux.Handle("/block", &blockHandler{cacheSet: cacheSet, pipeSet: pipeSet})
+	mux.Handle("/chain", &chainHandler{cacheSet: cacheSet, pipeSet: pipeSet})
 	return &HTTPServer{
 		mux:    mux,
 		cfg:    cfg,
@@ -138,6 +139,43 @@ func (h *blockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(data)
 
 		}
+
+	default:
+		data := &Resp{Result: RESP_FAILED, Msg: "Not Allowed"}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		err := json.NewEncoder(w).Encode(data)
+		if err != nil {
+			log.Errorf("Error happened in JSON marshal. Err: %s", err)
+		}
+
+	}
+}
+
+type chainHandler struct {
+	cacheSet *blockchain.CacheSet
+	pipeSet  *blockchain.PipeSet
+}
+
+func (h *chainHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+
+		x := h.cacheSet.ChainCache.Items()
+		//curr_chain := make(map[string]*cache.Item)
+		//
+		//for i,j := range x {
+		////	if strings.HasPrefix(i,"HEIGHT_"){
+		//		curr_chain[i]= j.Object.(*blockchain.Block)
+		////	}
+		//
+		//}
+		data := &RespGetChain{Result: RESP_SUCCESS, Chain: x}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(data)
 
 	default:
 		data := &Resp{Result: RESP_FAILED, Msg: "Not Allowed"}

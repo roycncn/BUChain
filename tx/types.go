@@ -24,7 +24,7 @@ type TxIn struct {
 }
 
 type TxOut struct {
-	Address *secp256k1.PublicKey
+	Address []byte
 	Amount  int
 }
 
@@ -36,7 +36,8 @@ func (t *Transcation) CalcTxID() string {
 	}
 
 	for _, txOut := range t.TxOut {
-		hasher.Write(txOut.Address.SerializeCompressed())
+		txOutAddr, _ := secp256k1.ParsePubKey(txOut.Address)
+		hasher.Write(txOutAddr.SerializeCompressed())
 		hasher.Write([]byte(strconv.Itoa(txOut.Amount)))
 	}
 	t.Id = hex.EncodeToString(hasher.Sum(nil))
@@ -49,7 +50,7 @@ func GetCoinbaseTX(Amount int, Address *secp256k1.PublicKey, Height int) *Transc
 	txIn := &TxIn{TxOutIndex: Height}
 
 	txOut := &TxOut{
-		Address: Address,
+		Address: Address.SerializeCompressed(),
 		Amount:  Amount,
 	}
 

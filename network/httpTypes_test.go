@@ -10,7 +10,6 @@ import (
 func TestBlockJson(t *testing.T) {
 
 	NGB := blockchain.NewGenesisBlock()
-	NGB.MineBlock()
 
 	req := ReqPostBlock{Block: NGB}
 	newData, _ := json.Marshal(req)

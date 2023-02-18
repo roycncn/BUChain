@@ -11,7 +11,6 @@ import (
 	"github.com/roycncn/BUChain/tx"
 	log "github.com/sirupsen/logrus"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -33,6 +32,7 @@ type blockServer struct {
 	UXTOCache          *cache.Cache
 	SyncBlockPipe      *pubsub.Publisher
 	BroadcastBlockPipe *pubsub.Publisher
+	GetChainPipe       *pubsub.Publisher
 	NewBlockCommitPipe *pubsub.Publisher //For Mempool
 	NewTXPipe          *pubsub.Publisher //For Mempool
 	MempoolSyncPipe    *pubsub.Publisher //For Mempool
@@ -55,6 +55,7 @@ func NewBlockServer(cfg *config.Config, pipeSet *PipeSet, cacheSet *CacheSet) *b
 		NewBlockCommitPipe: pipeSet.NewBlockCommitPipe,
 		NewTXPipe:          pipeSet.NewTXPipe,
 		MempoolSyncPipe:    pipeSet.MempoolSyncPipe,
+		GetChainPipe:       pipeSet.GetChainPipe,
 		priv:               priv,
 		Pubkey:             pubkey,
 		memPool:            &pq,
@@ -133,8 +134,11 @@ func (s blockServer) doSyncUXTO() {
 				}
 
 				for i, txout := range TX.TxOut {
+					if hex.EncodeToString(txout.Address) != "039d95813a47234fe889729ff94efa4bb170e4190ba4157f837a68621458018638" {
+						println("BREAK")
+					}
 					s.UXTOCache.Set(TX.Id+"-"+strconv.Itoa(i),
-						hex.EncodeToString(txout.Address.SerializeCompressed())+"-"+strconv.Itoa(txout.Amount), cache.NoExpiration)
+						hex.EncodeToString(txout.Address)+"-"+strconv.Itoa(txout.Amount), cache.NoExpiration)
 				}
 
 			}
@@ -213,56 +217,55 @@ out:
 func (s blockServer) doTimerTest() {
 	defer s.wg.Done()
 	t := time.NewTimer(0)
-	defer t.Stop()
+	t1 := time.NewTimer(0)
+	defer t1.Stop()
 	for {
 		select {
 		case <-s.quitCh:
 			return
 		case <-t.C:
-
 			log.Infof("Timer IS WORKING")
-			balance := make(map[string]int)
+			//balance := make(map[string]int)
 			x := s.UXTOCache.Items()
 			for i, j := range x {
+				fmt.Println(i, j.Object.(string))
+				/*			str := j.Object.(string)
+							acct := strings.Split(str, "-")
 
-				str := j.Object.(string)
-				acct := strings.Split(str, "-")
+							temp, _ := strconv.Atoi(acct[1])
+							balance[acct[0]] += temp*/
+				/*
+					txout := strings.Split(i, "-")
+					temp2, _ := strconv.Atoi(txout[1])
 
-				temp, _ := strconv.Atoi(acct[1])
-				balance[acct[0]] += temp
+					pubkeybyte, _ := hex.DecodeString("02e90c589d434fe3b70f11bea48bf54922c46646a82d4418d3d9ed16f258a7f88b")
+					recvpubkey, _ := secp256k1.ParsePubKey(pubkeybyte)
 
-				txout := strings.Split(i, "-")
-				temp2, _ := strconv.Atoi(txout[1])
+					if balance[acct[0]] > 150 {
+						txIns := []*tx.TxIn{{
+							TxOutId:    txout[0],
+							TxOutIndex: temp2,
+							Sig:        nil,
+						}}
 
-				pubkeybyte, _ := hex.DecodeString("02e90c589d434fe3b70f11bea48bf54922c46646a82d4418d3d9ed16f258a7f88b")
-				recvpubkey, _ := secp256k1.ParsePubKey(pubkeybyte)
+						txOuts := []*tx.TxOut{{
+							Address: recvpubkey,
+							Amount:  50,
+						}}
+						transcation := &tx.Transcation{
+							Id:    "",
+							TxIns: txIns,
+							TxOut: txOuts,
+						}
 
-				if balance[acct[0]] > 150 {
-					txIns := []*tx.TxIn{{
-						TxOutId:    txout[0],
-						TxOutIndex: temp2,
-						Sig:        nil,
-					}}
-
-					txOuts := []*tx.TxOut{{
-						Address: recvpubkey,
-						Amount:  50,
-					}}
-					transcation := &tx.Transcation{
-						Id:    "",
-						TxIns: txIns,
-						TxOut: txOuts,
-					}
-
-					transcation.Id = transcation.CalcTxID()
-					tx.CheckAndSignTxIn(s.priv, transcation, s.UXTOCache)
-					s.NewTXPipe.Publish(transcation)
-				}
+						transcation.Id = transcation.CalcTxID()
+						tx.CheckAndSignTxIn(s.priv, transcation, s.UXTOCache)
+						s.NewTXPipe.Publish(transcation)
+					}*/
 			}
-			for x, y := range balance {
-
-				fmt.Println(x, y)
-			}
+			/*			for x, y := range balance {
+						fmt.Println(x, y)
+					}*/
 			t.Reset(time.Second * 5)
 		}
 
@@ -292,6 +295,7 @@ func (s blockServer) doSyncBlock() {
 				s.NewBlockCommitPipe.Publish(newBlock)
 				log.Infof("New Block %v, %v Added to chain from ohters", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
 			} else if newBlock.Index-curr_block.Index > 1 {
+				s.GetChainPipe.Publish("GO")
 				log.Infof("New Block %v too high ignore by now, hash %v", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
 			} else {
 				//Same Block or Early blocks arrived. just ignore.
