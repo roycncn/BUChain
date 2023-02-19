@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-
 	"github.com/roycncn/BUChain/blockchain"
 	"github.com/roycncn/BUChain/config"
+	"github.com/roycncn/BUChain/tx"
 	log "github.com/sirupsen/logrus"
 	"net/http"
 	"strconv"
@@ -219,7 +219,7 @@ func (h *walletHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				record[postWallet.FromAddr] = append(record[postWallet.FromAddr], i+", Amount"+acct[1])
 
 			}
-
+			//toAddrByte, _ := hex.DecodeString(postWallet.ToAddr)
 			privKeyBytes, _ := hex.DecodeString(postWallet.Private)
 			priv := secp256k1.PrivKeyFromBytes(privKeyBytes)
 			if hex.EncodeToString(priv.PubKey().SerializeCompressed()) != postWallet.FromAddr {
@@ -232,9 +232,20 @@ func (h *walletHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					Msg: fmt.Sprintf("Address: %v Balance %d. Not enought to pay Amount %d",
 						postWallet.FromAddr, balance[postWallet.FromAddr], postWallet.Amount)}
 			} else {
+				txi, txo, _ := tx.GenerateUXTO(postWallet.FromAddr, postWallet.ToAddr, postWallet.Amount, h.cacheSet.UXTOCache)
+				transcation := &tx.Transcation{
+					Id:    "",
+					TxIns: txi,
+					TxOut: txo,
+				}
+
+				transcation.Id = transcation.CalcTxID()
+				tx.CheckAndSignTxIn(priv, transcation, h.cacheSet.UXTOCache)
+				h.pipeSet.NewTXPipe.Publish(transcation)
 				data = &Resp{
 					Result: RESP_SUCCESS,
-					Msg:    "OK"}
+					Msg:    transcation.Id}
+
 			}
 
 			w.Header().Set("Content-Type", "application/json")

@@ -217,51 +217,51 @@ func (s blockServer) doTimerTest() {
 		case <-s.quitCh:
 			return
 		case <-t.C:
-			//log.Infof("Timer IS WORKING")
-			//balance := make(map[string]int)
-			//x := s.cacheSet.UXTOCache.Items()
-			//for i, j := range x {
-			//fmt.Println(i, j.Object.(string))
-			/*			str := j.Object.(string)
-						acct := strings.Split(str, "-")
+			/*log.Infof("Timer IS WORKING")
+			balance := make(map[string]int)
+			x := s.cacheSet.UXTOCache.Items()
+			for i, j := range x {
+				fmt.Println(i, j.Object.(string))
+				str := j.Object.(string)
+				acct := strings.Split(str, "-")
 
-						temp, _ := strconv.Atoi(acct[1])
-						balance[acct[0]] += temp*/
-			/*
-				txout := strings.Split(i, "-")
-				temp2, _ := strconv.Atoi(txout[1])
+				temp, _ := strconv.Atoi(acct[1])
+				balance[acct[0]] += temp*/
 
-				pubkeybyte, _ := hex.DecodeString("02e90c589d434fe3b70f11bea48bf54922c46646a82d4418d3d9ed16f258a7f88b")
-				recvpubkey, _ := secp256k1.ParsePubKey(pubkeybyte)
+			/*				txout := strings.Split(i, "-")
+							temp2, _ := strconv.Atoi(txout[1])
 
-				if balance[acct[0]] > 150 {
-					txIns := []*tx.TxIn{{
-						TxOutId:    txout[0],
-						TxOutIndex: temp2,
-						Sig:        nil,
-					}}
+							pubkeybyte, _ := hex.DecodeString("02e90c589d434fe3b70f11bea48bf54922c46646a82d4418d3d9ed16f258a7f88b")
+							recvpubkey, _ := secp256k1.ParsePubKey(pubkeybyte)
 
-					txOuts := []*tx.TxOut{{
-						Address: recvpubkey,
-						Amount:  50,
-					}}
-					transcation := &tx.Transcation{
-						Id:    "",
-						TxIns: txIns,
-						TxOut: txOuts,
-					}
+							if balance[acct[0]] > 150 {
+								txIns := []*tx.TxIn{{
+									TxOutId:    txout[0],
+									TxOutIndex: temp2,
+									Sig:        nil,
+								}}
 
-					transcation.Id = transcation.CalcTxID()
-					tx.CheckAndSignTxIn(s.priv, transcation, s.UXTOCache)
-					s.NewTXPipe.Publish(transcation)
-				}*/
+								txOuts := []*tx.TxOut{{
+									Address: recvpubkey,
+									Amount:  50,
+								}}
+								transcation := &tx.Transcation{
+									Id:    "",
+									TxIns: txIns,
+									TxOut: txOuts,
+								}
+
+								transcation.Id = transcation.CalcTxID()
+								tx.CheckAndSignTxIn(s.priv, transcation, s.UXTOCache)
+								s.NewTXPipe.Publish(transcation)
+							}*/
 		}
 		/*			for x, y := range balance {
 					fmt.Println(x, y)
-				}*/
-		t.Reset(time.Second * 5)
-	}
 
+		*/
+	}
+	t.Reset(time.Second * 5)
 }
 
 func (s blockServer) doSyncBlock() {
