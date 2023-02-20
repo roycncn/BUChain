@@ -3,7 +3,6 @@ package blockchain
 import (
 	"container/heap"
 	"fmt"
-	"github.com/roycncn/BUChain/tx"
 	"math/rand"
 	"testing"
 	"time"
@@ -13,7 +12,7 @@ func TestTxPQ(t *testing.T) {
 	var pooltxs []*PooledTX
 
 	for i := 1; i < 10; i++ {
-		tx := &tx.Transcation{
+		tx := &Transcation{
 			Id:    "123",
 			TxIns: nil,
 			TxOut: nil,

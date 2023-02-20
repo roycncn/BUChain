@@ -1,6 +1,12 @@
 # BUChain
 BLOCKCHAIN Project
 
+# 分工
+- App Framework  : Roy
+- Blockchain - Blockchain Prototype: 怡姐
+- Blockchain - Mining, Consensus: BC
+- Blockchain - TX，UXTO，Mint Coin: 琛哥 
+- Network - Client 和 Server: 老园
 
 # Test PK - Miner
 8001 priv: 20674f94d76abbeaea279b356e0fba8a9cf8c9e415d2dc13ad34b2fe3a2dbff4
@@ -31,4 +37,15 @@ C Pub: 03d33caa21f026cfbd54a7877bec29227cc9926b557ebe67f73b696423a94fb90a
 
 
 
-#CURL
+#CURL测试用例
+POST 转账请求
+```
+curl --location --request POST 'http://127.0.0.1:8001/wallet' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+"FromAddr": "039d95813a47234fe889729ff94efa4bb170e4190ba4157f837a68621458018638",
+"ToAddr": "03a45af63249565ddd4185bc228e838b5d4d13f69e324abdda91b9bd538d80cc37",
+"Amount": 50,
+"PrivKey": "20674f94d76abbeaea279b356e0fba8a9cf8c9e415d2dc13ad34b2fe3a2dbff4"
+}'
+```

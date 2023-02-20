@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/patrickmn/go-cache"
-	"github.com/roycncn/BUChain/tx"
 	log "github.com/sirupsen/logrus"
 	"strconv"
 	"strings"
@@ -17,12 +16,12 @@ type Block struct {
 	Hash         [32]byte
 	PrevHash     [32]byte
 	Timestamp    int64
-	Transcations []*tx.Transcation
+	Transcations []*Transcation
 	Difficulty   int
 	Nonce        int64
 }
 
-func NewBlockWithoutControl(txs []*tx.Transcation, prevBlock *Block, difficulty int) *Block {
+func NewBlockWithoutControl(txs []*Transcation, prevBlock *Block, difficulty int) *Block {
 	block := &Block{}
 	block.Index = prevBlock.Index + 1
 	block.PrevHash = prevBlock.Hash
@@ -41,7 +40,7 @@ func NewBlockWithoutControl(txs []*tx.Transcation, prevBlock *Block, difficulty 
 	return block
 }
 
-func NewBlock(txs []*tx.Transcation, prevBlock *Block, difficulty int, minecache *cache.Cache) *Block {
+func NewBlock(txs []*Transcation, prevBlock *Block, difficulty int, minecache *cache.Cache) *Block {
 	block := &Block{}
 	block.Index = prevBlock.Index + 1
 	block.PrevHash = prevBlock.Hash
@@ -70,7 +69,6 @@ func NewGenesisBlockCalculate() *Block {
 	b.Timestamp = time.Now().Unix()
 	b.Nonce = 0
 	b.Difficulty = 20
-	//b.Hash = sha256.Sum256([]byte(strconv.FormatInt(b.Index, 10) + hex.EncodeToString(b.PrevHash[:]) + strconv.FormatInt(b.Timestamp, 10) + b.Data + string(b.Difficulty) + strconv.FormatInt(b.Nonce, 10)))
 	hasher := sha256.New()
 	for _, tx := range b.Transcations {
 		hasher.Write([]byte(tx.Id))

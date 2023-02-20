@@ -39,7 +39,7 @@ func (s *HTTPClient) Start() {
 	log.Info("HTTP Client Start")
 
 	s.wg.Add(2)
-	go s.doBroadcastBlock()
+	go s.doBroadcast()
 	go s.doGetChain()
 
 }
@@ -50,9 +50,10 @@ func (s *HTTPClient) Stop() {
 	s.wg.Wait()
 }
 
-func (s *HTTPClient) doBroadcastBlock() {
+func (s *HTTPClient) doBroadcast() {
 	defer s.wg.Done()
 	broadcastBlockPipe := s.pipeSet.BroadcastBlockPipe.Subscribe()
+	broadcastTxPipe := s.pipeSet.BroadcastTxPipe.Subscribe()
 	defer s.pipeSet.BroadcastBlockPipe.Evict(broadcastBlockPipe)
 
 	for {
@@ -75,7 +76,24 @@ func (s *HTTPClient) doBroadcastBlock() {
 				} else {
 					log.Infof("New Block %v broadcast to peer %v result :%v", newBlock.Index, peer, resp.StatusCode)
 				}
+			}
 
+		case msg := <-broadcastTxPipe:
+			newTxToPeer := msg.(*blockchain.Transcation)
+			log.Infof("New Tx %v broadcast", newTxToPeer.Id)
+			for _, peer := range s.peers {
+				reqBody, _ := json.Marshal(ReqPostTX{Tx: newTxToPeer})
+				bodyReader := bytes.NewReader(reqBody)
+
+				requestURL := fmt.Sprintf("http://127.0.0.1:%v/tx", peer)
+				req, _ := http.NewRequest(http.MethodPost, requestURL, bodyReader)
+				client := &http.Client{Timeout: 50 * time.Millisecond}
+				resp, err := client.Do(req)
+				if err != nil {
+					log.Infof("New TX %v broadcast to peer %v Err :%v", newTxToPeer.Id, peer, err.Error())
+				} else {
+					log.Infof("New TX %v broadcast to peer %v result :%v", newTxToPeer.Id, peer, resp.StatusCode)
+				}
 			}
 
 		}
@@ -94,7 +112,6 @@ func (s *HTTPClient) doGetChain() {
 		case <-getChainPipe:
 			log.Infof("Asking for blocks")
 			for _, peer := range s.peers {
-
 				requestURL := fmt.Sprintf("http://127.0.0.1:%v/chain", peer)
 				req, _ := http.NewRequest(http.MethodGet, requestURL, nil)
 				client := &http.Client{Timeout: 50 * time.Millisecond}
@@ -129,9 +146,7 @@ func (s *HTTPClient) doGetChain() {
 						log.Infof("Repacing Chain %v", s.cacheSet.ChainCache)
 					}
 				}
-
 			}
-
 		}
 	}
 }

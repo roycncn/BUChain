@@ -34,3 +34,13 @@ type ReqPostWallet struct {
 	Amount   int    `json:"Amount"`
 	Private  string `json:"PrivKey"`
 }
+
+type ReqPostTX struct {
+	Tx *blockchain.Transcation `json:"tx"`
+}
+
+type RespGetTX struct {
+	Result string                  `json:"result"`
+	Msg    string                  `json:"msg"`
+	Tx     *blockchain.Transcation `json:"tx"`
+}

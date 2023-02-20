@@ -4,36 +4,23 @@ import (
 	"container/heap"
 	"encoding/hex"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/docker/docker/pkg/pubsub"
 	"github.com/patrickmn/go-cache"
 	"github.com/roycncn/BUChain/config"
-	"github.com/roycncn/BUChain/tx"
 	log "github.com/sirupsen/logrus"
 	"strconv"
 	"sync"
 	"time"
 )
 
-const (
-	SYNCING = 1
-	OUTSYNC = -1
-	IDLE    = 0
-)
-
 type blockServer struct {
-	quitCh             chan struct{}
-	wg                 sync.WaitGroup
-	cfg                *config.Config
-	memPool            *TXPriorityQueue
-	priv               *secp256k1.PrivateKey
-	Pubkey             *secp256k1.PublicKey
-	cacheSet           *CacheSet
-	SyncBlockPipe      *pubsub.Publisher
-	BroadcastBlockPipe *pubsub.Publisher
-	GetChainPipe       *pubsub.Publisher
-	NewBlockCommitPipe *pubsub.Publisher //For Mempool
-	NewTXPipe          *pubsub.Publisher //For Mempool
-	MempoolSyncPipe    *pubsub.Publisher //For Mempool
+	quitCh   chan struct{}
+	wg       sync.WaitGroup
+	cfg      *config.Config
+	memPool  *TXPriorityQueue
+	priv     *secp256k1.PrivateKey
+	Pubkey   *secp256k1.PublicKey
+	cacheSet *CacheSet
+	pipeSet  *PipeSet
 
 	mempoolLck *sync.Mutex
 }
@@ -44,19 +31,14 @@ func NewBlockServer(cfg *config.Config, pipeSet *PipeSet, cacheSet *CacheSet) *b
 	pubkey := priv.PubKey()
 	pq := make(TXPriorityQueue, 0)
 	return &blockServer{
-		cfg:                cfg,
-		quitCh:             make(chan struct{}),
-		cacheSet:           cacheSet,
-		SyncBlockPipe:      pipeSet.SyncBlockPipe,
-		BroadcastBlockPipe: pipeSet.BroadcastBlockPipe,
-		NewBlockCommitPipe: pipeSet.NewBlockCommitPipe,
-		NewTXPipe:          pipeSet.NewTXPipe,
-		MempoolSyncPipe:    pipeSet.MempoolSyncPipe,
-		GetChainPipe:       pipeSet.GetChainPipe,
-		priv:               priv,
-		Pubkey:             pubkey,
-		memPool:            &pq,
-		mempoolLck:         new(sync.Mutex),
+		cfg:        cfg,
+		quitCh:     make(chan struct{}),
+		cacheSet:   cacheSet,
+		pipeSet:    pipeSet,
+		priv:       priv,
+		Pubkey:     pubkey,
+		memPool:    &pq,
+		mempoolLck: new(sync.Mutex),
 	}
 }
 
@@ -89,12 +71,13 @@ func (s blockServer) doLocalMining() {
 			return
 		default:
 			prevBlock := s.GetCurrBlock()
-			txs := make([]*tx.Transcation, 0)
-			transcation := tx.GetCoinbaseTX(50, s.Pubkey, int(prevBlock.Index+1))
+			txs := make([]*Transcation, 0)
+			transcation := GetCoinbaseTX(50, s.Pubkey, int(prevBlock.Index+1))
 			txs = append(txs, transcation)
 			s.mempoolLck.Lock()
 			log.Infof("Current mempool length %d", s.memPool.Len())
 			for i := 0; i < 10 && s.memPool.Len() > 0; i++ {
+				//Peak one result
 				pooledtx := s.memPool.Pop().(*PooledTX)
 				txs = append(txs, pooledtx.tx)
 			}
@@ -103,8 +86,8 @@ func (s blockServer) doLocalMining() {
 			if newBlock != nil && newBlock.isValidNextBlock(s.GetCurrBlock()) {
 				s.cacheSet.ChainCache.Set("CURR_HEIGHT", newBlock.Index, cache.NoExpiration)
 				s.cacheSet.ChainCache.Set("HEIGHT_"+strconv.FormatInt(newBlock.Index, 10), newBlock, cache.NoExpiration)
-				s.BroadcastBlockPipe.Publish(newBlock)
-				s.NewBlockCommitPipe.Publish(newBlock)
+				s.pipeSet.BroadcastBlockPipe.Publish(newBlock)
+				s.pipeSet.NewBlockCommitPipe.Publish(newBlock)
 				log.Infof("New Block %v, %v Added to chain by Local ,cache addr %v", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]), s.cacheSet.ChainCache)
 			}
 
@@ -115,8 +98,8 @@ func (s blockServer) doLocalMining() {
 
 func (s blockServer) doSyncUXTO() {
 	defer s.wg.Done()
-	newBlockCommitPipe := s.NewBlockCommitPipe.Subscribe()
-	defer s.NewBlockCommitPipe.Evict(newBlockCommitPipe)
+	newBlockCommitPipe := s.pipeSet.NewBlockCommitPipe.Subscribe()
+	defer s.pipeSet.NewBlockCommitPipe.Evict(newBlockCommitPipe)
 
 	for {
 		select {
@@ -145,20 +128,22 @@ func (s blockServer) doSyncUXTO() {
 func (s blockServer) doRunMemPool() {
 	defer s.wg.Done()
 
-	mempoolSyncPipe := s.MempoolSyncPipe.Subscribe()
-	newBlockCommitPipe := s.NewBlockCommitPipe.Subscribe()
-	newTXPipe := s.NewTXPipe.Subscribe()
+	mempoolSyncPipe := s.pipeSet.MempoolSyncPipe.Subscribe()
+	newBlockCommitPipe := s.pipeSet.NewBlockCommitPipe.Subscribe()
+	newTXPipe := s.pipeSet.NewTXPipe.Subscribe()
 
-	defer s.MempoolSyncPipe.Evict(mempoolSyncPipe)
-	defer s.NewBlockCommitPipe.Evict(newBlockCommitPipe)
-	defer s.NewTXPipe.Evict(newTXPipe)
+	defer s.pipeSet.MempoolSyncPipe.Evict(mempoolSyncPipe)
+	defer s.pipeSet.NewBlockCommitPipe.Evict(newBlockCommitPipe)
+	defer s.pipeSet.NewTXPipe.Evict(newTXPipe)
 
-out:
 	for {
+	out:
 		select {
 		case <-s.quitCh:
 			return
+
 		case msg := <-mempoolSyncPipe:
+			//Not USING
 			s.mempoolLck.Lock()
 			m := msg.(*TXPriorityQueue)
 			s.memPool = m
@@ -177,9 +162,9 @@ out:
 			}
 			s.mempoolLck.Unlock()
 		case msg := <-newTXPipe:
-
-			m := msg.(*tx.Transcation)
-			check, err := tx.CheckUXTOandCheckSign(m, s.cacheSet.UXTOCache)
+			txTmp := msg.(*Transcation)
+			log.Infof("A TX %v Received ", txTmp.Id)
+			check, err := CheckUXTOandCheckSign(txTmp, s.cacheSet.UXTOCache)
 			if !check {
 				log.Errorf("TX check failed %v", err)
 				break
@@ -187,17 +172,16 @@ out:
 
 			s.mempoolLck.Lock()
 			for _, txInPool := range *s.memPool {
-				if txInPool.tx.Id == m.Id {
+				if txInPool.tx.Id == txTmp.Id {
 					s.mempoolLck.Unlock()
 					//If the newTX already exist, then we don't add in the mempool
-					log.Infof("SKIP TX %v ", m.Id)
+					log.Infof("SKIP TX %v ", txTmp.Id)
 					break out
 				}
 			}
-
 			ptx := &PooledTX{
 				timestamp: time.Now().UnixNano(),
-				tx:        m,
+				tx:        txTmp,
 			}
 
 			heap.Push(s.memPool, ptx)
@@ -266,8 +250,8 @@ func (s blockServer) doTimerTest() {
 
 func (s blockServer) doSyncBlock() {
 	defer s.wg.Done()
-	syncBlockPipe := s.SyncBlockPipe.Subscribe()
-	defer s.SyncBlockPipe.Evict(syncBlockPipe)
+	syncBlockPipe := s.pipeSet.SyncBlockPipe.Subscribe()
+	defer s.pipeSet.SyncBlockPipe.Evict(syncBlockPipe)
 
 	for {
 		select {
@@ -281,7 +265,7 @@ func (s blockServer) doSyncBlock() {
 				log.Infof("Same Height Block or early Height %v , hash %v", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
 			} else if newBlock.Index-curr_block.Index > 1 {
 				log.Infof("New Block %v too high, trigger replacechain, hash %v", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
-				s.GetChainPipe.Publish("GO")
+				s.pipeSet.GetChainPipe.Publish("GO")
 				time.Sleep(2 * time.Second)
 				log.Infof("Current chain cache %v", s.cacheSet.ChainCache)
 
@@ -290,7 +274,7 @@ func (s blockServer) doSyncBlock() {
 				s.cacheSet.ChainCache.Set("MINING_STATUS", 0, cache.NoExpiration)
 				s.cacheSet.ChainCache.Set("CURR_HEIGHT", newBlock.Index, cache.NoExpiration)
 				s.cacheSet.ChainCache.Set("HEIGHT_"+strconv.FormatInt(newBlock.Index, 10), newBlock, cache.NoExpiration)
-				s.NewBlockCommitPipe.Publish(newBlock)
+				s.pipeSet.NewBlockCommitPipe.Publish(newBlock)
 				log.Infof("New Block %v, %v Added to chain from ohters", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]))
 			} else {
 				//Same Block or Early blocks arrived. just ignore.

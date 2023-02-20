@@ -1,4 +1,4 @@
-package tx
+package blockchain
 
 import (
 	"crypto/sha256"
@@ -10,6 +10,23 @@ import (
 	"strconv"
 	"strings"
 )
+
+type Transcation struct {
+	Id    string
+	TxIns []*TxIn
+	TxOut []*TxOut
+}
+
+type TxIn struct {
+	TxOutId    string
+	TxOutIndex int
+	Sig        []byte
+}
+
+type TxOut struct {
+	Address []byte
+	Amount  int
+}
 
 func (t *Transcation) CalcTxID() string {
 	hasher := sha256.New()

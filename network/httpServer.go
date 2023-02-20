@@ -7,7 +7,6 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/roycncn/BUChain/blockchain"
 	"github.com/roycncn/BUChain/config"
-	"github.com/roycncn/BUChain/tx"
 	log "github.com/sirupsen/logrus"
 	"net/http"
 	"strconv"
@@ -40,7 +39,7 @@ func NewHTTPServer(cfg *config.Config, pipeSet *blockchain.PipeSet, cacheSet *bl
 	mux.Handle("/", &indexHandler{cacheSet: cacheSet})
 	mux.Handle("/block", &blockHandler{cacheSet: cacheSet, pipeSet: pipeSet})
 	mux.Handle("/chain", &chainHandler{cacheSet: cacheSet, pipeSet: pipeSet})
-
+	mux.Handle("/tx", &txHandler{cacheSet: cacheSet, pipeSet: pipeSet})
 	//User Side
 	mux.Handle("/wallet", &walletHandler{cacheSet: cacheSet, pipeSet: pipeSet})
 	return &HTTPServer{
@@ -232,15 +231,17 @@ func (h *walletHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					Msg: fmt.Sprintf("Address: %v Balance %d. Not enought to pay Amount %d",
 						postWallet.FromAddr, balance[postWallet.FromAddr], postWallet.Amount)}
 			} else {
-				txi, txo, _ := tx.GenerateUXTO(postWallet.FromAddr, postWallet.ToAddr, postWallet.Amount, h.cacheSet.UXTOCache)
-				transcation := &tx.Transcation{
+				txi, txo, _ := blockchain.GenerateUXTO(postWallet.FromAddr, postWallet.ToAddr, postWallet.Amount, h.cacheSet.UXTOCache)
+				transcation := &blockchain.Transcation{
 					Id:    "",
 					TxIns: txi,
 					TxOut: txo,
 				}
 
 				transcation.Id = transcation.CalcTxID()
-				tx.CheckAndSignTxIn(priv, transcation, h.cacheSet.UXTOCache)
+				blockchain.CheckAndSignTxIn(priv, transcation, h.cacheSet.UXTOCache)
+				//BroadCast TX to peers
+				h.pipeSet.BroadcastTxPipe.Publish(transcation)
 				h.pipeSet.NewTXPipe.Publish(transcation)
 				data = &Resp{
 					Result: RESP_SUCCESS,
@@ -274,6 +275,81 @@ func (h *walletHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(data)
+
+	default:
+		data := &Resp{Result: RESP_FAILED, Msg: "Not Allowed"}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		err := json.NewEncoder(w).Encode(data)
+		if err != nil {
+			log.Errorf("Error happened in JSON marshal. Err: %s", err)
+		}
+
+	}
+}
+
+type txHandler struct {
+	cacheSet *blockchain.CacheSet
+	pipeSet  *blockchain.PipeSet
+}
+
+func (h *txHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "POST":
+		decoder := json.NewDecoder(r.Body)
+		var postTX *ReqPostTX
+		err := decoder.Decode(&postTX)
+		if err != nil {
+			data := &Resp{Result: RESP_FAILED, Msg: err.Error()}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			log.Errorf("Error happened in Block Unmarshal. Err: %s", err)
+			err := json.NewEncoder(w).Encode(data)
+			if err != nil {
+				return
+			}
+		} else {
+			h.pipeSet.NewTXPipe.Publish(postTX.Tx)
+			data := &Resp{Result: RESP_SUCCESS, Msg: "OK"}
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(data)
+		}
+	case "GET":
+		txId := r.URL.Query().Get("txId")
+		x := h.cacheSet.ChainCache.Items()
+		height := ""
+		var txResult *blockchain.Transcation
+		for i, j := range x {
+			if strings.HasPrefix(i, "HEIGHT_") {
+				block := j.Object.(*blockchain.Block)
+				for _, txTmp := range block.Transcations {
+					if txTmp.Id == txId {
+						height = i
+						txResult = txTmp
+					}
+				}
+			}
+		}
+
+		if txResult != nil {
+
+			data := &RespGetTX{Result: RESP_SUCCESS, Msg: fmt.Sprintf("Tx @ %v", height), Tx: txResult}
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(data)
+		} else {
+			data := &Resp{Result: RESP_FAILED, Msg: fmt.Sprintf("Can't find txId %v ", txId)}
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(data)
+		}
 
 	default:
 		data := &Resp{Result: RESP_FAILED, Msg: "Not Allowed"}

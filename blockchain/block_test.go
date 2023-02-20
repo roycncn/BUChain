@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
-	"github.com/roycncn/BUChain/tx"
 	"strings"
 	"testing"
 	"time"
@@ -94,7 +93,7 @@ func TestByte(t *testing.T) {
 
 func TestCoinbase(t *testing.T) {
 	key, _ := secp256k1.GeneratePrivateKey()
-	tx := tx.GetCoinbaseTX(50, key.PubKey(), 1)
+	tx := GetCoinbaseTX(50, key.PubKey(), 1)
 	x, _ := json.Marshal(tx)
 	fmt.Println(x)
 }

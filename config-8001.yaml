@@ -1,5 +1,4 @@
 rest_port:  "8001"
-node_port: "3001"
 log_level : "INFO"
 log_output: "./out-8001.log"
 peers_list: "8002,8003"

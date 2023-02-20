@@ -4,13 +4,13 @@ import (
 	"container/heap"
 	"github.com/docker/docker/pkg/pubsub"
 	"github.com/patrickmn/go-cache"
-	"github.com/roycncn/BUChain/tx"
 	"time"
 )
 
 type PipeSet struct {
 	SyncBlockPipe      *pubsub.Publisher
 	BroadcastBlockPipe *pubsub.Publisher
+	BroadcastTxPipe    *pubsub.Publisher
 	GetChainPipe       *pubsub.Publisher
 	NewBlockCommitPipe *pubsub.Publisher //For Mempool
 	NewTXPipe          *pubsub.Publisher //For Mempool
@@ -27,6 +27,7 @@ func NewPipeSet() *PipeSet {
 		GetChainPipe:       pubsub.NewPublisher(100*time.Millisecond, 100),
 		SyncBlockPipe:      pubsub.NewPublisher(100*time.Millisecond, 100),
 		BroadcastBlockPipe: pubsub.NewPublisher(100*time.Millisecond, 100),
+		BroadcastTxPipe:    pubsub.NewPublisher(100*time.Millisecond, 100),
 		NewBlockCommitPipe: pubsub.NewPublisher(100*time.Millisecond, 100),
 		NewTXPipe:          pubsub.NewPublisher(100*time.Millisecond, 100),
 		MempoolSyncPipe:    pubsub.NewPublisher(100*time.Millisecond, 100),
@@ -43,7 +44,7 @@ func NewCacheSet() *CacheSet {
 
 type PooledTX struct {
 	timestamp int64
-	tx        *tx.Transcation
+	tx        *Transcation
 	index     int
 }
 
@@ -68,6 +69,13 @@ func (pq *TXPriorityQueue) Push(x interface{}) {
 	*pq = append(*pq, item)
 }
 
+func (pq *TXPriorityQueue) Peek() interface{} {
+	old := *pq
+	n := len(old)
+	item := old[n-1]
+	return item
+}
+
 func (pq *TXPriorityQueue) Pop() interface{} {
 	old := *pq
 	n := len(old)
@@ -79,7 +87,7 @@ func (pq *TXPriorityQueue) Pop() interface{} {
 }
 
 // update modifies the priority and value of an Item in the queue.
-func (pq *TXPriorityQueue) update(item *PooledTX, tx *tx.Transcation, timestamp int64) {
+func (pq *TXPriorityQueue) update(item *PooledTX, tx *Transcation, timestamp int64) {
 	item.tx = tx
 	item.timestamp = timestamp
 	heap.Fix(pq, item.index)
