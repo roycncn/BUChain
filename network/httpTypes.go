@@ -36,11 +36,11 @@ type ReqPostWallet struct {
 }
 
 type ReqPostTX struct {
-	Tx *blockchain.Transcation `json:"tx"`
+	Tx *blockchain.Transaction `json:"tx"`
 }
 
 type RespGetTX struct {
 	Result string                  `json:"result"`
 	Msg    string                  `json:"msg"`
-	Tx     *blockchain.Transcation `json:"tx"`
+	Tx     *blockchain.Transaction `json:"tx"`
 }

@@ -71,9 +71,9 @@ func (s blockServer) doLocalMining() {
 			return
 		default:
 			prevBlock := s.GetCurrBlock()
-			txs := make([]*Transcation, 0)
-			transcation := GetCoinbaseTX(50, s.Pubkey, int(prevBlock.Index+1))
-			txs = append(txs, transcation)
+			txs := make([]*Transaction, 0)
+			Transaction := GetCoinbaseTX(50, s.Pubkey, int(prevBlock.Index+1))
+			txs = append(txs, Transaction)
 			s.mempoolLck.Lock()
 			log.Infof("Current mempool length %d", s.memPool.Len())
 			for i := 0; i < 10 && s.memPool.Len() > 0; i++ {
@@ -107,7 +107,7 @@ func (s blockServer) doSyncUXTO() {
 			return
 		case msg := <-newBlockCommitPipe:
 			m := msg.(*Block)
-			for _, TX := range m.Transcations {
+			for _, TX := range m.Transactions {
 
 				for _, txin := range TX.TxIns {
 					s.cacheSet.UXTOCache.Delete(txin.TxOutId + "-" + strconv.Itoa(txin.TxOutIndex))
@@ -153,7 +153,7 @@ func (s blockServer) doRunMemPool() {
 			m := msg.(*Block)
 			//If TX in block then remove
 			s.mempoolLck.Lock()
-			for _, TX := range m.Transcations {
+			for _, TX := range m.Transactions {
 				for _, txInPool := range *s.memPool {
 					if txInPool.tx.Id == TX.Id {
 						heap.Remove(s.memPool, txInPool.index)
@@ -162,7 +162,7 @@ func (s blockServer) doRunMemPool() {
 			}
 			s.mempoolLck.Unlock()
 		case msg := <-newTXPipe:
-			txTmp := msg.(*Transcation)
+			txTmp := msg.(*Transaction)
 			log.Infof("A TX %v Received ", txTmp.Id)
 			check, err := CheckUXTOandCheckSign(txTmp, s.cacheSet.UXTOCache)
 			if !check {
@@ -229,15 +229,15 @@ func (s blockServer) doTimerTest() {
 									Address: recvpubkey,
 									Amount:  50,
 								}}
-								transcation := &tx.Transcation{
+								Transaction := &tx.Transaction{
 									Id:    "",
 									TxIns: txIns,
 									TxOut: txOuts,
 								}
 
-								transcation.Id = transcation.CalcTxID()
-								tx.CheckAndSignTxIn(s.priv, transcation, s.UXTOCache)
-								s.NewTXPipe.Publish(transcation)
+								Transaction.Id = Transaction.CalcTxID()
+								tx.CheckAndSignTxIn(s.priv, Transaction, s.UXTOCache)
+								s.NewTXPipe.Publish(Transaction)
 							}*/
 		}
 		/*			for x, y := range balance {

@@ -79,7 +79,7 @@ func (s *HTTPClient) doBroadcast() {
 			}
 
 		case msg := <-broadcastTxPipe:
-			newTxToPeer := msg.(*blockchain.Transcation)
+			newTxToPeer := msg.(*blockchain.Transaction)
 			log.Infof("New Tx %v broadcast", newTxToPeer.Id)
 			for _, peer := range s.peers {
 				reqBody, _ := json.Marshal(ReqPostTX{Tx: newTxToPeer})

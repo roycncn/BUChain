@@ -44,7 +44,7 @@ func NewCacheSet() *CacheSet {
 
 type PooledTX struct {
 	timestamp int64
-	tx        *Transcation
+	tx        *Transaction
 	index     int
 }
 
@@ -87,7 +87,7 @@ func (pq *TXPriorityQueue) Pop() interface{} {
 }
 
 // update modifies the priority and value of an Item in the queue.
-func (pq *TXPriorityQueue) update(item *PooledTX, tx *Transcation, timestamp int64) {
+func (pq *TXPriorityQueue) update(item *PooledTX, tx *Transaction, timestamp int64) {
 	item.tx = tx
 	item.timestamp = timestamp
 	heap.Fix(pq, item.index)

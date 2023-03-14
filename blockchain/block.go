@@ -16,22 +16,22 @@ type Block struct {
 	Hash         [32]byte
 	PrevHash     [32]byte
 	Timestamp    int64
-	Transcations []*Transcation
+	Transactions []*Transaction
 	Difficulty   int
 	Nonce        int64
 }
 
-func NewBlockWithoutControl(txs []*Transcation, prevBlock *Block, difficulty int) *Block {
+func NewBlockWithoutControl(txs []*Transaction, prevBlock *Block, difficulty int) *Block {
 	block := &Block{}
 	block.Index = prevBlock.Index + 1
 	block.PrevHash = prevBlock.Hash
 	block.Timestamp = time.Now().Unix()
-	block.Transcations = txs
+	block.Transactions = txs
 	block.Difficulty = difficulty
-	block.Transcations = txs
+	block.Transactions = txs
 
 	hasher := sha256.New()
-	for _, tx := range block.Transcations {
+	for _, tx := range block.Transactions {
 		hasher.Write([]byte(tx.Id))
 	}
 	txHash := hex.EncodeToString(hasher.Sum(nil))
@@ -40,17 +40,17 @@ func NewBlockWithoutControl(txs []*Transcation, prevBlock *Block, difficulty int
 	return block
 }
 
-func NewBlock(txs []*Transcation, prevBlock *Block, difficulty int, minecache *cache.Cache) *Block {
+func NewBlock(txs []*Transaction, prevBlock *Block, difficulty int, minecache *cache.Cache) *Block {
 	block := &Block{}
 	block.Index = prevBlock.Index + 1
 	block.PrevHash = prevBlock.Hash
 	block.Timestamp = time.Now().Unix()
-	block.Transcations = txs
+	block.Transactions = txs
 	block.Difficulty = difficulty
-	block.Transcations = txs
+	block.Transactions = txs
 
 	hasher := sha256.New()
-	for _, tx := range block.Transcations {
+	for _, tx := range block.Transactions {
 		hasher.Write([]byte(tx.Id))
 	}
 	txHash := hex.EncodeToString(hasher.Sum(nil))
@@ -70,7 +70,7 @@ func NewGenesisBlockCalculate() *Block {
 	b.Nonce = 0
 	b.Difficulty = 20
 	hasher := sha256.New()
-	for _, tx := range b.Transcations {
+	for _, tx := range b.Transactions {
 		hasher.Write([]byte(tx.Id))
 	}
 	txHash := hex.EncodeToString(hasher.Sum(nil))
@@ -87,7 +87,7 @@ func NewGenesisBlock() *Block {
 	b.Difficulty = 20
 
 	hasher := sha256.New()
-	for _, tx := range b.Transcations {
+	for _, tx := range b.Transactions {
 		hasher.Write([]byte(tx.Id))
 	}
 	txHash := hex.EncodeToString(hasher.Sum(nil))
@@ -153,7 +153,7 @@ func (b *Block) isValidNextBlock(prev *Block) bool {
 		return false
 	}
 	hasher := sha256.New()
-	for _, tx := range b.Transcations {
+	for _, tx := range b.Transactions {
 		hasher.Write([]byte(tx.Id))
 	}
 	txHash := hex.EncodeToString(hasher.Sum(nil))

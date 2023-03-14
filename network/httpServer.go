@@ -232,20 +232,20 @@ func (h *walletHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						postWallet.FromAddr, balance[postWallet.FromAddr], postWallet.Amount)}
 			} else {
 				txi, txo, _ := blockchain.GenerateUXTO(postWallet.FromAddr, postWallet.ToAddr, postWallet.Amount, h.cacheSet.UXTOCache)
-				transcation := &blockchain.Transcation{
+				Transaction := &blockchain.Transaction{
 					Id:    "",
 					TxIns: txi,
 					TxOut: txo,
 				}
 
-				transcation.Id = transcation.CalcTxID()
-				blockchain.CheckAndSignTxIn(priv, transcation, h.cacheSet.UXTOCache)
+				Transaction.Id = Transaction.CalcTxID()
+				blockchain.CheckAndSignTxIn(priv, Transaction, h.cacheSet.UXTOCache)
 				//BroadCast TX to peers
-				h.pipeSet.BroadcastTxPipe.Publish(transcation)
-				h.pipeSet.NewTXPipe.Publish(transcation)
+				h.pipeSet.BroadcastTxPipe.Publish(Transaction)
+				h.pipeSet.NewTXPipe.Publish(Transaction)
 				data = &Resp{
 					Result: RESP_SUCCESS,
-					Msg:    transcation.Id}
+					Msg:    Transaction.Id}
 
 			}
 
@@ -321,11 +321,11 @@ func (h *txHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		txId := r.URL.Query().Get("txId")
 		x := h.cacheSet.ChainCache.Items()
 		height := ""
-		var txResult *blockchain.Transcation
+		var txResult *blockchain.Transaction
 		for i, j := range x {
 			if strings.HasPrefix(i, "HEIGHT_") {
 				block := j.Object.(*blockchain.Block)
-				for _, txTmp := range block.Transcations {
+				for _, txTmp := range block.Transactions {
 					if txTmp.Id == txId {
 						height = i
 						txResult = txTmp

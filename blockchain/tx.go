@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-type Transcation struct {
+type Transaction struct {
 	Id    string
 	TxIns []*TxIn
 	TxOut []*TxOut
@@ -28,7 +28,7 @@ type TxOut struct {
 	Amount  int
 }
 
-func (t *Transcation) CalcTxID() string {
+func (t *Transaction) CalcTxID() string {
 	hasher := sha256.New()
 	for _, txIn := range t.TxIns {
 		hasher.Write([]byte(txIn.TxOutId))
@@ -45,8 +45,8 @@ func (t *Transcation) CalcTxID() string {
 
 }
 
-func GetCoinbaseTX(Amount int, Address *secp256k1.PublicKey, Height int) *Transcation {
-	tx := &Transcation{}
+func GetCoinbaseTX(Amount int, Address *secp256k1.PublicKey, Height int) *Transaction {
+	tx := &Transaction{}
 	txIn := &TxIn{TxOutIndex: Height}
 
 	txOut := &TxOut{
@@ -61,7 +61,7 @@ func GetCoinbaseTX(Amount int, Address *secp256k1.PublicKey, Height int) *Transc
 
 }
 
-func CheckUXTOandCheckSign(tx *Transcation, UXTOEntries *cache.Cache) (bool, error) {
+func CheckUXTOandCheckSign(tx *Transaction, UXTOEntries *cache.Cache) (bool, error) {
 	for _, txIn := range tx.TxIns {
 		if uxto, found := UXTOEntries.Get(txIn.TxOutId + "-" + strconv.Itoa(txIn.TxOutIndex)); found {
 			pubkeystr := uxto.(string)
@@ -82,7 +82,7 @@ func CheckUXTOandCheckSign(tx *Transcation, UXTOEntries *cache.Cache) (bool, err
 	return true, nil
 }
 
-func CheckAndSignTxIn(priv *secp256k1.PrivateKey, tx *Transcation, UXTOEntries *cache.Cache) error {
+func CheckAndSignTxIn(priv *secp256k1.PrivateKey, tx *Transaction, UXTOEntries *cache.Cache) error {
 	for _, txIn := range tx.TxIns {
 		if _, found := UXTOEntries.Get(txIn.TxOutId + "-" + strconv.Itoa(txIn.TxOutIndex)); found {
 			sig := ecdsa.Sign(priv, []byte(txIn.TxOutId))

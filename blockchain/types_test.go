@@ -12,7 +12,7 @@ func TestTxPQ(t *testing.T) {
 	var pooltxs []*PooledTX
 
 	for i := 1; i < 10; i++ {
-		tx := &Transcation{
+		tx := &Transaction{
 			Id:    "123",
 			TxIns: nil,
 			TxOut: nil,
