@@ -52,7 +52,7 @@ func (s blockServer) Start() {
 	go s.doRunMemPool()
 	go s.doSyncBlock()
 	go s.doLocalMining()
-	go s.doSyncUXTO()
+	go s.doSyncUTXO()
 	go s.doTimerTest()
 }
 
@@ -96,7 +96,7 @@ func (s blockServer) doLocalMining() {
 
 }
 
-func (s blockServer) doSyncUXTO() {
+func (s blockServer) doSyncUTXO() {
 	defer s.wg.Done()
 	newBlockCommitPipe := s.pipeSet.NewBlockCommitPipe.Subscribe()
 	defer s.pipeSet.NewBlockCommitPipe.Evict(newBlockCommitPipe)
@@ -110,11 +110,11 @@ func (s blockServer) doSyncUXTO() {
 			for _, TX := range m.Transactions {
 
 				for _, txin := range TX.TxIns {
-					s.cacheSet.UXTOCache.Delete(txin.TxOutId + "-" + strconv.Itoa(txin.TxOutIndex))
+					s.cacheSet.UTXOCache.Delete(txin.TxOutId + "-" + strconv.Itoa(txin.TxOutIndex))
 				}
 
 				for i, txout := range TX.TxOut {
-					s.cacheSet.UXTOCache.Set(TX.Id+"-"+strconv.Itoa(i),
+					s.cacheSet.UTXOCache.Set(TX.Id+"-"+strconv.Itoa(i),
 						hex.EncodeToString(txout.Address)+"-"+strconv.Itoa(txout.Amount), cache.NoExpiration)
 				}
 
@@ -164,7 +164,7 @@ func (s blockServer) doRunMemPool() {
 		case msg := <-newTXPipe:
 			txTmp := msg.(*Transaction)
 			log.Infof("A TX %v Received ", txTmp.Id)
-			check, err := CheckUXTOandCheckSign(txTmp, s.cacheSet.UXTOCache)
+			check, err := CheckUTXOandCheckSign(txTmp, s.cacheSet.UTXOCache)
 			if !check {
 				log.Errorf("TX check failed %v", err)
 				break
@@ -203,7 +203,7 @@ func (s blockServer) doTimerTest() {
 		case <-t.C:
 			/*log.Infof("Timer IS WORKING")
 			balance := make(map[string]int)
-			x := s.cacheSet.UXTOCache.Items()
+			x := s.cacheSet.UTXOCache.Items()
 			for i, j := range x {
 				fmt.Println(i, j.Object.(string))
 				str := j.Object.(string)
@@ -236,7 +236,7 @@ func (s blockServer) doTimerTest() {
 								}
 
 								Transaction.Id = Transaction.CalcTxID()
-								tx.CheckAndSignTxIn(s.priv, Transaction, s.UXTOCache)
+								tx.CheckAndSignTxIn(s.priv, Transaction, s.UTXOCache)
 								s.NewTXPipe.Publish(Transaction)
 							}*/
 		}

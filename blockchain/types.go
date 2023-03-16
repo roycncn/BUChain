@@ -19,7 +19,7 @@ type PipeSet struct {
 
 type CacheSet struct {
 	ChainCache *cache.Cache
-	UXTOCache  *cache.Cache
+	UTXOCache  *cache.Cache
 }
 
 func NewPipeSet() *PipeSet {
@@ -37,7 +37,7 @@ func NewPipeSet() *PipeSet {
 func NewCacheSet() *CacheSet {
 	return &CacheSet{
 		ChainCache: cache.New(5*time.Minute, 10*time.Minute), //缓存数据
-		UXTOCache:  cache.New(5*time.Minute, 10*time.Minute), //缓存数据
+		UTXOCache:  cache.New(5*time.Minute, 10*time.Minute), //缓存数据
 
 	}
 }

@@ -209,7 +209,7 @@ func (h *walletHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			var data *Resp
 			balance := make(map[string]int)
 			record := make(map[string][]string)
-			x := h.cacheSet.UXTOCache.Items()
+			x := h.cacheSet.UTXOCache.Items()
 			for i, j := range x {
 				str := j.Object.(string)
 				acct := strings.Split(str, "-")
@@ -231,7 +231,7 @@ func (h *walletHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					Msg: fmt.Sprintf("Address: %v Balance %d. Not enought to pay Amount %d",
 						postWallet.FromAddr, balance[postWallet.FromAddr], postWallet.Amount)}
 			} else {
-				txi, txo, _ := blockchain.GenerateUXTO(postWallet.FromAddr, postWallet.ToAddr, postWallet.Amount, h.cacheSet.UXTOCache)
+				txi, txo, _ := blockchain.GenerateUTXO(postWallet.FromAddr, postWallet.ToAddr, postWallet.Amount, h.cacheSet.UTXOCache)
 				Transaction := &blockchain.Transaction{
 					Id:    "",
 					TxIns: txi,
@@ -239,7 +239,7 @@ func (h *walletHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 
 				Transaction.Id = Transaction.CalcTxID()
-				blockchain.CheckAndSignTxIn(priv, Transaction, h.cacheSet.UXTOCache)
+				blockchain.CheckAndSignTxIn(priv, Transaction, h.cacheSet.UTXOCache)
 				//BroadCast TX to peers
 				h.pipeSet.BroadcastTxPipe.Publish(Transaction)
 				h.pipeSet.NewTXPipe.Publish(Transaction)
@@ -259,7 +259,7 @@ func (h *walletHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		addr := r.URL.Query().Get("addr")
 		balance := make(map[string]int)
 		record := make(map[string][]string)
-		x := h.cacheSet.UXTOCache.Items()
+		x := h.cacheSet.UTXOCache.Items()
 		for i, j := range x {
 			str := j.Object.(string)
 			acct := strings.Split(str, "-")

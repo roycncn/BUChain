@@ -127,7 +127,7 @@ func (s *HTTPClient) doGetChain() {
 					} else {
 						log.Infof("Chain Addr before repace %v", s.cacheSet.ChainCache)
 						newCache := cache.New(5*time.Minute, 10*time.Minute)
-						s.cacheSet.UXTOCache = cache.New(5*time.Minute, 10*time.Minute)
+						s.cacheSet.UTXOCache = cache.New(5*time.Minute, 10*time.Minute)
 						for i, j := range getBlockResp.Chain {
 							if strings.HasPrefix(i, "CURR_HEIGHT") {
 								newCache.Set("CURR_HEIGHT", int64(j.Object.(float64)), cache.NoExpiration)

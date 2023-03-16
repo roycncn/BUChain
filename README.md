@@ -5,7 +5,7 @@ BLOCKCHAIN Project
 - App Framework  : Roy
 - Blockchain - Blockchain Prototype: 怡姐
 - Blockchain - Mining, Consensus: BC
-- Blockchain - TX，UXTO，Mint Coin: 琛哥 
+- Blockchain - TX，UTXO，Mint Coin: 琛哥 
 - Network - Client 和 Server: 老园
 
 # Test PK - Miner

@@ -61,10 +61,10 @@ func GetCoinbaseTX(Amount int, Address *secp256k1.PublicKey, Height int) *Transa
 
 }
 
-func CheckUXTOandCheckSign(tx *Transaction, UXTOEntries *cache.Cache) (bool, error) {
+func CheckUTXOandCheckSign(tx *Transaction, UTXOEntries *cache.Cache) (bool, error) {
 	for _, txIn := range tx.TxIns {
-		if uxto, found := UXTOEntries.Get(txIn.TxOutId + "-" + strconv.Itoa(txIn.TxOutIndex)); found {
-			pubkeystr := uxto.(string)
+		if UTXO, found := UTXOEntries.Get(txIn.TxOutId + "-" + strconv.Itoa(txIn.TxOutIndex)); found {
+			pubkeystr := UTXO.(string)
 			pubkeybyte, _ := hex.DecodeString(strings.Split(pubkeystr, "-")[0])
 			pubkey, _ := secp256k1.ParsePubKey(pubkeybyte)
 			sig, _ := ecdsa.ParseDERSignature(txIn.Sig)
@@ -72,7 +72,7 @@ func CheckUXTOandCheckSign(tx *Transaction, UXTOEntries *cache.Cache) (bool, err
 				return false, errors.New("Sig Wrong")
 			}
 		} else {
-			return false, errors.New("Can't Find Such UXTO!")
+			return false, errors.New("Can't Find Such UTXO!")
 		}
 	}
 	if tx.CalcTxID() != tx.Id {
@@ -82,20 +82,20 @@ func CheckUXTOandCheckSign(tx *Transaction, UXTOEntries *cache.Cache) (bool, err
 	return true, nil
 }
 
-func CheckAndSignTxIn(priv *secp256k1.PrivateKey, tx *Transaction, UXTOEntries *cache.Cache) error {
+func CheckAndSignTxIn(priv *secp256k1.PrivateKey, tx *Transaction, UTXOEntries *cache.Cache) error {
 	for _, txIn := range tx.TxIns {
-		if _, found := UXTOEntries.Get(txIn.TxOutId + "-" + strconv.Itoa(txIn.TxOutIndex)); found {
+		if _, found := UTXOEntries.Get(txIn.TxOutId + "-" + strconv.Itoa(txIn.TxOutIndex)); found {
 			sig := ecdsa.Sign(priv, []byte(txIn.TxOutId))
 			txIn.Sig = sig.Serialize()
 		} else {
-			return errors.New("Can't Find Such UXTO!")
+			return errors.New("Can't Find Such UTXO!")
 		}
 	}
 	return nil
 }
 
-func GenerateUXTO(FromAddr string, ToAddr string, Amount int, UXTOEntries *cache.Cache) ([]*TxIn, []*TxOut, error) {
-	x := UXTOEntries.Items()
+func GenerateUTXO(FromAddr string, ToAddr string, Amount int, UTXOEntries *cache.Cache) ([]*TxIn, []*TxOut, error) {
+	x := UTXOEntries.Items()
 
 	balance := make(map[string]int)
 	record := make(map[string][]string)
