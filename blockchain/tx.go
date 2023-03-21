@@ -53,7 +53,6 @@ func GetCoinbaseTX(Amount int, Address *secp256k1.PublicKey, Height int) *Transa
 		Address: Address.SerializeCompressed(),
 		Amount:  Amount,
 	}
-
 	tx.TxOut = append(tx.TxOut, txOut)
 	tx.TxIns = append(tx.TxIns, txIn)
 	tx.CalcTxID()

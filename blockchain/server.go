@@ -90,10 +90,8 @@ func (s blockServer) doLocalMining() {
 				s.pipeSet.NewBlockCommitPipe.Publish(newBlock)
 				log.Infof("New Block %v, %v Added to chain by Local ,cache addr %v", newBlock.Index, hex.EncodeToString(newBlock.Hash[:]), s.cacheSet.ChainCache)
 			}
-
 		}
 	}
-
 }
 
 func (s blockServer) doSyncUTXO() {
@@ -128,11 +126,9 @@ func (s blockServer) doSyncUTXO() {
 func (s blockServer) doRunMemPool() {
 	defer s.wg.Done()
 
-	mempoolSyncPipe := s.pipeSet.MempoolSyncPipe.Subscribe()
 	newBlockCommitPipe := s.pipeSet.NewBlockCommitPipe.Subscribe()
 	newTXPipe := s.pipeSet.NewTXPipe.Subscribe()
 
-	defer s.pipeSet.MempoolSyncPipe.Evict(mempoolSyncPipe)
 	defer s.pipeSet.NewBlockCommitPipe.Evict(newBlockCommitPipe)
 	defer s.pipeSet.NewTXPipe.Evict(newTXPipe)
 
@@ -142,13 +138,6 @@ func (s blockServer) doRunMemPool() {
 		case <-s.quitCh:
 			return
 
-		case msg := <-mempoolSyncPipe:
-			//Not USING
-			s.mempoolLck.Lock()
-			m := msg.(*TXPriorityQueue)
-			s.memPool = m
-			//delete invalid
-			s.mempoolLck.Unlock()
 		case msg := <-newBlockCommitPipe:
 			m := msg.(*Block)
 			//If TX in block then remove

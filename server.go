@@ -17,18 +17,14 @@ var pipeSet = blockchain.NewPipeSet()
 var cacheSet = blockchain.NewCacheSet()
 
 func Start(cfg *config.Config) error {
-
 	log.Info("BU Chain Server Starting")
-
 	blockServer := blockchain.NewBlockServer(cfg, pipeSet, cacheSet)
 	httpServer := network.NewHTTPServer(cfg, pipeSet, cacheSet)
 	httpClient := network.NewHTTPClient(cfg, pipeSet, cacheSet)
 	httpServer.Start()
 	httpClient.Start()
 	blockServer.Start() //non block start up
-
 	waitExit()
-
 	blockServer.Stop()
 	httpClient.Stop()
 	httpServer.Stop()

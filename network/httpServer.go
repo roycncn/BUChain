@@ -51,9 +51,7 @@ func NewHTTPServer(cfg *config.Config, pipeSet *blockchain.PipeSet, cacheSet *bl
 
 func (s *HTTPServer) Start() {
 	log.Info("HTTP Server start : %v", s.cfg.RestPort)
-
 	go http.ListenAndServe(":"+s.cfg.RestPort, s.mux)
-
 }
 
 func (s *HTTPServer) Stop() {
@@ -318,7 +316,7 @@ func (h *txHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(data)
 		}
 	case "GET":
-		txId := r.URL.Query().Get("txId")
+		txId := r.URL.Query().Get("txid")
 		x := h.cacheSet.ChainCache.Items()
 		height := ""
 		var txResult *blockchain.Transaction

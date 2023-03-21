@@ -112,9 +112,7 @@ func (b *Block) hashMatchDifficulty() bool {
 
 func (b *Block) MineBlock(txHash string) {
 	b.Nonce = 0
-
 	for {
-
 		b.Hash = sha256.Sum256([]byte(strconv.FormatInt(b.Index, 10) + hex.EncodeToString(b.PrevHash[:]) + strconv.FormatInt(b.Timestamp, 10) + txHash + strconv.FormatInt(b.Nonce, 10)))
 		if b.hashMatchDifficulty() {
 			break
