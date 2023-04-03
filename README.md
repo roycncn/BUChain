@@ -1,5 +1,20 @@
 # BUChain
 BLOCKCHAIN Project
+```
+22428682 HUANG Weiyi
+22435956 LIU Bicheng
+22443606 WU Chen
+22407677 YAO Ruilin
+22467610 ZHANG Yatao
+```
+
+
+#Running
+```
+cd .cmd/chaind
+go build
+./chaind start -f ../../config.yaml 
+```
 
 # 分工
 - App Framework  : Roy
